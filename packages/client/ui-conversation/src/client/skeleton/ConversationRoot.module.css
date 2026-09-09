@@ -384,7 +384,12 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  /* Same outer-scroll contract as the main column: a `[data-conversation-scroll]`
+     ancestor makes Chat hand its scrolling to this box (content flows at natural
+     height) instead of growing an inner virtual scroller that the split column
+     cannot bound. */
+  scrollbar-gutter: stable;
   border-top: 0.5px solid var(--dsw-alias-border-l3);
 }
 

@@ -397,8 +397,9 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   }, InputBar)
 
   // The split trigger lives in the current Session's header and pins that
-  // Session into the read-only pane column; the pane shell reads the same
-  // pin through the sessions service and hides while it equals current.
+  // Session as the single read-only pane column; pinning again (or while a
+  // different Session is pinned) replaces, and the pane shell hides while the
+  // pinned Session equals the current one.
   const registerSplitPaneAction = () => slots.register({
     name: 'conversation.session.header.actions',
     id: 'split-pane',
@@ -407,6 +408,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     inject: (sessionId: SessionId): SplitPaneActionInjected => ({
       hooks: { sessionPanes: sessions.panes },
       pin: () => { sessions.pin(sessionId) },
+      closePane: (id) => { sessions.closePane(id) },
     }),
   }, SplitPaneAction)
 

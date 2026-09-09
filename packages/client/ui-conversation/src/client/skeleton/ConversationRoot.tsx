@@ -411,7 +411,7 @@ export function ConversationRoot({
             ×
           </button>
         </div>
-        <div className={css.paneBody}>
+        <div className={css.paneBody} data-conversation-scroll="">
           <SessionRegion sessionId={activePane}>
             {renderSlot('conversation.session', {})}
           </SessionRegion>
