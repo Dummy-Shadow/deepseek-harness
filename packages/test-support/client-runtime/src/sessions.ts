@@ -11,7 +11,7 @@ import type {
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionRequestId } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { createSnapshotStore, notifySubscribers } from '@deepseek-ai/dsh-client-store'
 import type { ObservableSnapshot, SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { sessionSnapshot } from './fixtures.ts'
@@ -194,6 +194,27 @@ export class TestSessions implements ISessions {
   /** The useSessions standard feed (list rows + current selection). */
   readonly list: SnapshotStore<SessionListState>
   private readonly records = new Map<SessionId, SessionRecord>()
+  /** Side-pane fixtures retained by {@link TestSessions.pin} (see {@link TestSessions.panes}). */
+  private readonly paneIds = new Set<SessionId>()
+  private paneSnapshot: readonly SessionId[] = []
+  private readonly paneListeners = new Set<() => void>()
+  /** Read-only side-pane roster mirroring the production face (`pin`/`closePane` move it). */
+  readonly panes: ObservableSnapshot<readonly SessionId[]> = {
+    getSnapshot: () => this.paneSnapshot,
+    subscribe: (listener) => {
+      this.paneListeners.add(listener)
+      return () => { this.paneListeners.delete(listener) }
+    },
+  }
+
+  private publishPanes(): void {
+    const snapshot = Object.freeze([...this.paneIds])
+    const previous = this.paneSnapshot
+    if (previous.length === snapshot.length
+      && previous.every((id, index) => id === snapshot[index])) return
+    this.paneSnapshot = snapshot
+    notifySubscribers(this.paneListeners, '[test-sessions] pane roster')
+  }
 
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
@@ -447,11 +468,15 @@ export class TestSessions implements ISessions {
   pin(id: SessionId): void {
     this.calls.push({ method: 'pin', args: [id] })
     this.require(id)
+    this.paneIds.add(id)
+    this.publishPanes()
   }
 
   /** Release a side-pane pin (fixture keeps its scope while listed). */
   closePane(id: SessionId): void {
     this.calls.push({ method: 'closePane', args: [id] })
+    if (!this.paneIds.delete(id)) return
+    this.publishPanes()
   }
 
   /** Open an existing fixture through its catalog address. */

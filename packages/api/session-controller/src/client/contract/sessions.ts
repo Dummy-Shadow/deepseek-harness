@@ -21,6 +21,8 @@ export type { AgentContext } from '../scope.ts'
 export interface ISessions {
   /** The useSessions standard feed (list rows + current selection; read face — writes stay inside the domain). */
   readonly list: ObservableSnapshot<SessionListState>
+  /** Side-pane Session identities retained open by `pin` (read face; writes stay in `pin`/`closePane`). */
+  readonly panes: ObservableSnapshot<readonly SessionId[]>
   /**
    * The `session.search` result bound the wire schema fixes, exposed to
    * presentation as injected data. Not per-connection state: every transport

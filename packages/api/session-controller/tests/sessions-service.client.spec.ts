@@ -111,6 +111,44 @@ describe('list store projection', () => {
   })
 })
 
+describe('side-pane roster', () => {
+  it('publishes pin/closePane membership through the panes feed with stable snapshots', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 's1' }, { id: 's2' }])
+    const panes = b.svc.panes
+    const initial = panes.getSnapshot()
+    const seen: readonly SessionId[][] = []
+    const off = panes.subscribe(() => { seen.push(panes.getSnapshot()) })
+
+    b.svc.pin(sid('s2'))
+    const pinned = panes.getSnapshot()
+    expect(pinned).toEqual([sid('s2')])
+    expect(pinned).not.toBe(initial)
+    expect(seen).toHaveLength(1)
+
+    b.svc.pin(sid('s2')) // duplicate: membership unchanged — no republish, same reference
+    expect(panes.getSnapshot()).toBe(pinned)
+    expect(seen).toHaveLength(1)
+
+    b.svc.closePane(sid('s2'))
+    expect(panes.getSnapshot()).toEqual([])
+    expect(seen).toHaveLength(2)
+
+    off()
+    b.svc.closePane(sid('s2')) // already closed: no republish after unsubscribe
+    expect(seen).toHaveLength(2)
+  })
+
+  it('leaves the roster untouched for unknown pins and closes', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 's1' }])
+    b.svc.pin(sid('ghost'))
+    expect(b.svc.panes.getSnapshot()).toEqual([])
+    b.svc.closePane(sid('ghost'))
+    expect(b.svc.panes.getSnapshot()).toEqual([])
+  })
+})
+
 describe('search', () => {
   it('delegates transient content search without changing the list snapshot', async () => {
     const b = bench()

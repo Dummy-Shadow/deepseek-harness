@@ -79,6 +79,7 @@ function fakeSessions(ctx: Context): { sessions: ISessions; binding: SessionBind
   })
   const sessions = {
     list,
+    panes: { getSnapshot: () => [] as const, subscribe: () => () => {} },
     searchResultLimit: 50,
     create: () => Promise.reject(new Error('unused fake Sessions operation')),
     open: () => {},

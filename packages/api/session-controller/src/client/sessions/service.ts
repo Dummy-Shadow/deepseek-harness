@@ -25,7 +25,7 @@ import { SESSION_SEARCH_RESULT_LIMIT } from '../../types.ts'
 import type { SessionJob as JobView } from '../../types.ts'
 import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
 import {
-  createSnapshotStore, type SnapshotStore,
+  createSnapshotStore, notifySubscribers, type ObservableSnapshot, type SnapshotStore,
 } from '@deepseek-ai/dsh-client-store'
 import type { RemoteFailure, RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type { SessionEventSource } from '../contract/events.ts'
@@ -216,7 +216,32 @@ export class ClientSessions implements ISessions {
   /** Removed-while-staged sessions whose teardown waits for the stage to move away. */
   private readonly deferredRemovals = new Set<SessionId>()
   /** Side-pane sessions kept open alongside the current one (see `pin`/`closePane`). */
-  private readonly panes = new Set<SessionId>()
+  private readonly paneIds = new Set<SessionId>()
+  /** Live pane roster published through {@link ClientSessions.panes}. */
+  private paneSnapshot: readonly SessionId[] = []
+  private readonly paneListeners = new Set<() => void>()
+  /**
+   * Read-only roster of retained side-pane Session identities. The snapshot
+   * reference is stable between changes; membership moves only through
+   * {@link ClientSessions.pin} and {@link ClientSessions.closePane}.
+   */
+  readonly panes: ObservableSnapshot<readonly SessionId[]> = {
+    getSnapshot: () => this.paneSnapshot,
+    subscribe: (listener) => {
+      this.paneListeners.add(listener)
+      return () => { this.paneListeners.delete(listener) }
+    },
+  }
+
+  /** Publish the pane roster when membership changed (keeps the snapshot reference stable). */
+  private publishPanes(): void {
+    const snapshot = Object.freeze([...this.paneIds])
+    const previous = this.paneSnapshot
+    if (previous.length === snapshot.length
+      && previous.every((id, index) => id === snapshot[index])) return
+    this.paneSnapshot = snapshot
+    notifySubscribers(this.paneListeners, '[sessions] pane roster')
+  }
 
   /**
    * @param ctx - client root context (scope fibers mount under it).
@@ -284,7 +309,8 @@ export class ClientSessions implements ISessions {
   pin(id: SessionId): void {
     const snapshot = this.list.getSnapshot()
     if (snapshot.current !== id && snapshot.byId[id] === undefined) return
-    this.panes.add(id)
+    this.paneIds.add(id)
+    this.publishPanes()
     const record = this.resolve(id)
     // resolve() may have minted the scope already; open() is idempotent.
     if (record !== undefined) void record.session.open()
@@ -298,7 +324,8 @@ export class ClientSessions implements ISessions {
    * @param id - pinned session id.
    */
   closePane(id: SessionId): void {
-    this.panes.delete(id)
+    if (!this.paneIds.delete(id)) return
+    this.publishPanes()
     if (id === this.watched) return
     this.deferredRemovals.delete(id)
     const record = this.scopes.get(id)
@@ -687,7 +714,7 @@ export class ClientSessions implements ISessions {
     if (this.list.getSnapshot().phase === 'pending') return
     for (const [id, record] of this.scopes) {
       if (this.eligible(id)) continue
-      if (id === this.watched || this.panes.has(id)) {
+      if (id === this.watched || this.paneIds.has(id)) {
         this.deferredRemovals.add(id)
         continue
       }
@@ -735,7 +762,7 @@ export class ClientSessions implements ISessions {
       /* v8 ignore next -- defensive: only staged/pinned ids ever defer, and
        * every stage move sweeps first, so the set cannot contain the id the
        * stage just moved to; kept as a guard against future sweep call sites. */
-      if (id === this.watched || this.panes.has(id)) continue
+      if (id === this.watched || this.paneIds.has(id)) continue
       // Eligible again? (A re-added id cancels the deferred teardown.)
       if (this.eligible(id)) {
         this.deferredRemovals.delete(id)
