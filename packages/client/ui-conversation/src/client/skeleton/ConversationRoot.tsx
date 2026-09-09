@@ -158,6 +158,8 @@ export function ConversationRoot({
     ? undefined
     : panes.find(id => id !== sessionId)
   const paneSummary = useSessions(s => paneId === undefined ? undefined : s.byId[paneId])
+  const panePendingInteraction = useSessionPendingInteraction(snapshot =>
+    paneId === undefined ? undefined : snapshot.get(paneId))
   // A plugin this package cannot import (ui-model-selection) says this session cannot
   // send; its reason is already localized by whoever raised it.
   const composerBlock = useComposerBlock(block => block)
@@ -411,11 +413,21 @@ export function ConversationRoot({
             ×
           </button>
         </div>
-        <div className={css.paneBody} data-conversation-scroll="">
-          <SessionRegion sessionId={activePane}>
+        <SessionRegion sessionId={activePane}>
+          <div className={css.paneBody} data-conversation-scroll="">
             {renderSlot('conversation.session', {})}
-          </SessionRegion>
-        </div>
+          </div>
+          <div className={css.paneComposerSeat}>
+            {renderSlotChain(
+              'conversation.composer',
+              { sessionId: activePane, session: undefined, pendingInteraction: panePendingInteraction },
+              {
+                fallback: renderSlot('conversation.composer.bar', { variant: 'composer' }),
+                overlay: true,
+              },
+            )}
+          </div>
+        </SessionRegion>
       </aside>
     )
 

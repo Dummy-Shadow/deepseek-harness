@@ -178,6 +178,7 @@ function mount(
   const useConversationViews: SessionSlotProps['useConversationViews'] = selector => selector(viewTabs)
   /** Owner share handed to the two composer tool-row seats, per render. */
   const seatOwners: { key: string; owner: unknown }[] = []
+  const chainOwners: { sessionId: string | undefined; pendingInteraction: unknown }[] = []
   let pickerOwner: unknown
   const renderSlot = ((key: string, owner: object, opts?: { only?: string; fallback?: ReactNode }) => {
     slotCalls.push(key)
@@ -280,8 +281,14 @@ function mount(
     }
     return <div data-testid={`view-${opts?.only ?? key}`} />
   }) as ConversationRootProps['renderSlot']
-  const renderSlotChain = ((_key, _owner, opts) => (
-    options.overlayTakeover === true
+  const renderSlotChain = ((key, owner, opts) => {
+    if (key === 'conversation.composer') {
+      chainOwners.push({
+        sessionId: (owner as { sessionId?: string }).sessionId,
+        pendingInteraction: (owner as { pendingInteraction?: unknown }).pendingInteraction,
+      })
+    }
+    return options.overlayTakeover === true
       ? (
         <>
           <div data-chain-overlay-fallback="conversation.composer" style={{ display: 'none' }}>
@@ -291,7 +298,7 @@ function mount(
         </>
       )
       : (opts?.fallback ?? null)
-  )) as ConversationRootProps['renderSlotChain']
+  }) as ConversationRootProps['renderSlotChain']
   const props: ConversationRootProps = {
     sessionId: SID,
     SessionProvider: ({ children }) => children,
@@ -315,7 +322,7 @@ function mount(
   const view = render(<ConversationRoot {...props} />)
   return {
     view, store, wiring, sink, retargetWorkspace, session, conversation, slotCalls, lineageOwners, seatOwners, open,
-    panes, closePane,
+    panes, closePane, chainOwners,
     pickerOwner: () => pickerOwner,
     rerender: () => { view.rerender(<ConversationRoot {...props} />) },
   }
@@ -693,6 +700,12 @@ describe('split pane column', () => {
     expect(pane).not.toBeNull()
     expect(pane?.textContent).toContain('s2')
     expect(b.slotCalls).toContain('conversation.session.header')
+    // The pane is a second interactive conversation: it carries its own
+    // composer seat and its composer chain is addressed to the pinned Session.
+    expect(pane?.querySelector('[data-composer-input]')).not.toBeNull()
+    const chainIds = b.chainOwners.map(owner => owner.sessionId)
+    expect(chainIds).toContain(SID)
+    expect(chainIds).toContain('s2')
     fireEvent.click(b.view.getByRole('button', { name: '关闭分屏' }))
     expect(b.closePane).toHaveBeenCalledWith(sid('s2'))
   })

@@ -338,6 +338,10 @@
   min-height: 0;
   background: var(--dsw-alias-bg-base);
   border-left: 0.5px solid var(--dsw-alias-border-l3);
+  /* The pane column is fixed-width; re-anchor the shared chat/composer width
+     axis to the pane instead of inheriting the main column's wider clamp. */
+  --dsh-chat-content-width: min(calc(100% - 64px), 680px);
+  --dsh-composer-card-max-width: calc(var(--dsh-chat-content-width) + 32px);
 }
 
 .paneHeader {
@@ -390,6 +394,18 @@
      height) instead of growing an inner virtual scroller that the split column
      cannot bound. */
   scrollbar-gutter: stable;
+  border-top: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+/* The pane's own composer seat sits below its transcript (no sticky fade —
+   the seat is a separate flex row, so the transcript never hides behind it). */
+.paneComposerSeat {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-width: 0;
+  padding: 8px 12px 12px;
+  background: var(--dsw-alias-bg-base);
   border-top: 0.5px solid var(--dsw-alias-border-l3);
 }
 
