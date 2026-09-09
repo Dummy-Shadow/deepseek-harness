@@ -334,6 +334,7 @@
 /* Right read-only Session column (split view). Fixed width is driven inline
    by the same constant the width axis subtracts, so geometry never drifts. */
 .pane {
+  position: relative;
   display: flex;
   flex: none;
   flex-direction: column;
@@ -345,6 +346,33 @@
      axis to the pane instead of inheriting the main column's wider clamp. */
   --dsh-chat-content-width: min(calc(100% - 64px), 680px);
   --dsh-composer-card-max-width: calc(var(--dsh-chat-content-width) + 32px);
+}
+
+/* Col-resize strip on the pane's left edge (the seam to the column before it). */
+.paneResize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  z-index: 9;
+  width: 8px;
+  cursor: col-resize;
+}
+
+.paneResize::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  opacity: 0;
+  background: var(--dsw-alias-scrollbar-hover-l1);
+}
+
+.paneResize:hover::after,
+.paneResize:active::after {
+  opacity: 1;
 }
 
 .paneHeader {

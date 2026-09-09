@@ -25,8 +25,13 @@ const CONTENT_MIN = 640
  * larger dragged width would push its own handles off the column and leave no
  * way to drag back. */
 const CONTENT_EDGE_BUDGET = 176
-/** Fixed right-pane width when a split view is open (read-only Session column). */
+/** Default right-pane width when a split view is open (interactive Session column). */
 const PANE_WIDTH = 400
+/** Draggable pane width bounds (px). */
+const PANE_MIN = 280
+const PANE_MAX = 720
+/** localStorage prefix for the per-pane dragged width preference (px). */
+const PANE_WIDTH_PREF_PREFIX = 'dsh.conversation.paneWidth'
 
 /** Reads the persisted width preference; durable-storage boundary, so a
  * missing or corrupt value resolves to "no preference".
@@ -36,6 +41,24 @@ function readWidthPreference(): number | null {
   if (raw === null) return null
   const value = Number(raw)
   return Number.isFinite(value) && value > 0 ? value : null
+}
+
+/** Read one pane's persisted width, absent or corrupt → null. */
+function readPaneWidthPreference(sessionId: string): number | null {
+  const raw = localStorage.getItem(`${PANE_WIDTH_PREF_PREFIX}.${sessionId}`)
+  if (raw === null) return null
+  const value = Number(raw)
+  return Number.isFinite(value) && value > 0 ? value : null
+}
+
+/** Persist one pane's dragged width. */
+function writePaneWidthPreference(sessionId: string, width: number): void {
+  localStorage.setItem(`${PANE_WIDTH_PREF_PREFIX}.${sessionId}`, `${width}`)
+}
+
+/** Clamp a dragged pane width to its draggable range. */
+function clampPaneWidth(width: number): number {
+  return Math.min(PANE_MAX, Math.max(PANE_MIN, width))
 }
 
 /** Resolves the content width the CSS axis would show for a column width.
@@ -133,6 +156,50 @@ function WidthHandle(props: {
   )
 }
 
+/** One split-pane width handle: pointer-capture col-resize on the pane's left
+ * edge. Dragging publishes live widths; release clamps and commits. */
+function PaneResizeHandle({
+  width,
+  onDrag,
+  onCommit,
+}: {
+  width: number
+  onDrag: (width: number) => void
+  onCommit: (width: number) => void
+}) {
+  const latest = useRef({ width, onDrag, onCommit })
+  latest.current = { width, onDrag, onCommit }
+  const origin = useRef(0)
+  const base = useRef(PANE_WIDTH)
+  const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    origin.current = e.clientX
+    base.current = latest.current.width
+  }, [])
+  const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
+    latest.current.onDrag(clampPaneWidth(base.current + (e.clientX - origin.current)))
+  }, [])
+  const onPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
+    e.currentTarget.releasePointerCapture(e.pointerId)
+    latest.current.onCommit(clampPaneWidth(base.current + (e.clientX - origin.current)))
+  }, [])
+  const onPointerCancel = useCallback(() => {}, [])
+  return (
+    <div
+      className={css.paneResize}
+      data-pane-resize=""
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onLostPointerCapture={onPointerCancel}
+    />
+  )
+}
+
 export function ConversationRoot({
   sessionId, useSession, useSessions, useSessionPendingInteraction,
   useSessionPanes, useWorkspaces, useConversation, useInput, useComposerBlock,
@@ -162,6 +229,8 @@ export function ConversationRoot({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pendingWorkspaceId, setPendingWorkspaceId] = useState<WorkspaceId | undefined>()
   const pickerAnchor = useRef<HTMLButtonElement>(null)
+  // Live pane widths during drag; persisted per pane id in localStorage.
+  const [paneWidths, setPaneWidths] = useState<Record<string, number>>({})
 
   // Publishes the two live measurements floating View chrome reads off the
   // scroll body: the seat's height as --dsh-composer-height, so controls clear
@@ -393,7 +462,11 @@ export function ConversationRoot({
   const visiblePanes = sessionId === undefined || phase !== 'active'
     ? []
     : panes.filter(id => id !== sessionId)
-  paneWidth.current = visiblePanes.length * PANE_WIDTH
+  const widthOf = (id: string): number => paneWidths[id] ?? readPaneWidthPreference(id) ?? PANE_WIDTH
+  paneWidth.current = visiblePanes.reduce((sum, id) => sum + widthOf(id), 0)
+  const setPaneWidth = (id: string, width: number): void => {
+    setPaneWidths(current => ({ ...current, [id]: width }))
+  }
   const SessionRegion = sessionRegion
   const panesEl = visiblePanes.map((id) => {
     const title = sessionsById[id]?.displayTitle ?? id
@@ -402,10 +475,18 @@ export function ConversationRoot({
       <aside
         key={id}
         className={css.pane}
-        style={{ width: PANE_WIDTH }}
+        style={{ width: widthOf(id) }}
         data-conversation-pane=""
         aria-label={t('split.openLabel')}
       >
+        <PaneResizeHandle
+          width={widthOf(id)}
+          onDrag={(width) => { setPaneWidth(id, width) }}
+          onCommit={(width) => {
+            setPaneWidth(id, width)
+            writePaneWidthPreference(id, width)
+          }}
+        />
         <div className={css.paneHeader}>
           <span className={css.paneTitle}>{title}</span>
           <button

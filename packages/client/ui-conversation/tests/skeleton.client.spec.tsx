@@ -742,4 +742,33 @@ describe('split pane column', () => {
     fireEvent.click(firstClose)
     expect(b.closePane).toHaveBeenCalledWith(sid('s2'))
   })
+
+  it('drags a pane width and persists the preference', () => {
+    const b = mount(sessionSnapshotOf())
+    act(() => { b.panes.set([sid('s2')]) })
+    b.rerender()
+    const pane = b.view.container.querySelector('[data-conversation-pane]') as HTMLElement
+    expect(pane.style.width).toBe('400px')
+    const handle = pane.querySelector('[data-pane-resize]') as HTMLElement
+    const names = ['setPointerCapture', 'releasePointerCapture', 'hasPointerCapture'] as const
+    const originals = names.map(name =>
+      [name, Object.getOwnPropertyDescriptor(Element.prototype, name)] as const)
+    const captured = new Set<Element>()
+    Element.prototype.setPointerCapture = function () { captured.add(this) }
+    Element.prototype.releasePointerCapture = function () { captured.delete(this) }
+    Element.prototype.hasPointerCapture = function () { return captured.has(this) }
+    try {
+      act(() => { fireEvent.pointerDown(handle, { pointerId: 1, clientX: 100, clientY: 50 }) })
+      act(() => { fireEvent.pointerMove(handle, { pointerId: 1, clientX: 160, clientY: 50 }) })
+      expect(pane.style.width).toBe('460px')
+      act(() => { fireEvent.pointerUp(handle, { pointerId: 1, clientX: 60, clientY: 50 }) })
+      expect(pane.style.width).toBe('360px')
+      expect(localStorage.getItem('dsh.conversation.paneWidth.s2')).toBe('360')
+    } finally {
+      for (const [name, descriptor] of originals) {
+        if (descriptor === undefined) Reflect.deleteProperty(Element.prototype, name)
+        else Object.defineProperty(Element.prototype, name, descriptor)
+      }
+    }
+  })
 })
