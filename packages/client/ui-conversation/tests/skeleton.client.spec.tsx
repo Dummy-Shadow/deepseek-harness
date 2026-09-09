@@ -761,11 +761,12 @@ describe('split pane column', () => {
     Element.prototype.hasPointerCapture = function () { return captured.has(this) }
     try {
       act(() => { fireEvent.pointerDown(handle, { pointerId: 1, clientX: 100, clientY: 50 }) })
-      act(() => { fireEvent.pointerMove(handle, { pointerId: 1, clientX: 160, clientY: 50 }) })
+      // Dragging LEFT (x 100 → 40) widens the pane.
+      act(() => { fireEvent.pointerMove(handle, { pointerId: 1, clientX: 40, clientY: 50 }) })
       expect(pane.style.width).toBe('460px')
-      act(() => { fireEvent.pointerUp(handle, { pointerId: 1, clientX: 60, clientY: 50 }) })
-      expect(pane.style.width).toBe('360px')
-      expect(localStorage.getItem('dsh.conversation.paneWidth.s2')).toBe('360')
+      act(() => { fireEvent.pointerUp(handle, { pointerId: 1, clientX: 40, clientY: 50 }) })
+      expect(pane.style.width).toBe('460px')
+      expect(localStorage.getItem('dsh.conversation.paneWidth.s2')).toBe('460')
     } finally {
       for (const [name, descriptor] of originals) {
         if (descriptor === undefined) Reflect.deleteProperty(Element.prototype, name)

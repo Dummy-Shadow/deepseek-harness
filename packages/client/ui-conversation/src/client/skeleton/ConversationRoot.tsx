@@ -180,12 +180,14 @@ function PaneResizeHandle({
   }, [])
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
-    latest.current.onDrag(clampPaneWidth(base.current + (e.clientX - origin.current)))
+    // The handle sits on the pane's LEFT edge: dragging left (origin − x > 0)
+    // widens the pane, dragging right narrows it.
+    latest.current.onDrag(clampPaneWidth(base.current + (origin.current - e.clientX)))
   }, [])
   const onPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (!e.currentTarget.hasPointerCapture(e.pointerId)) return
     e.currentTarget.releasePointerCapture(e.pointerId)
-    latest.current.onCommit(clampPaneWidth(base.current + (e.clientX - origin.current)))
+    latest.current.onCommit(clampPaneWidth(base.current + (origin.current - e.clientX)))
   }, [])
   const onPointerCancel = useCallback(() => {}, [])
   return (
