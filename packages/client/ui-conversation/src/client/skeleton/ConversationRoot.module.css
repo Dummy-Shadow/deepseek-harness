@@ -328,7 +328,10 @@
 }
 
 .columns > .body {
-  min-width: 0;
+  flex: 1 1 auto;
+  /* Never let retained panes crush the main conversation out of existence;
+     when the panes outgrow the viewport the band scrolls instead. */
+  min-width: 480px;
 }
 
 /* Right read-only Session column (split view). Fixed width is driven inline
