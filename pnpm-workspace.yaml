@@ -21,6 +21,11 @@ linkWorkspacePackages: true
 overrides:
   '@deepseek-ai/cosmokit': 'link:vendor/cosmokit'
   '@deepseek-ai/schemastery': 'link:vendor/schemastery'
+  # Local fork: fs-ext compiles its flock(2) binding with node-gyp at install,
+  # which requires a C++ toolchain that this Windows machine lacks. DSH only
+  # calls flock on POSIX (win32 takes a named kernel semaphore), so Windows
+  # builds substitute a no-op binding that never runs. See tools/fs-ext-win-stub.
+  'fs-ext': 'link:tools/fs-ext-win-stub'
 
 peerDependencyRules:
   allowedVersions:

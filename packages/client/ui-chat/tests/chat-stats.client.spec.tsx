@@ -218,7 +218,7 @@ describe('StatsLine', () => {
     expect(view.container.textContent).toContain(expected)
   })
 
-  it('reveals the full line in a delayed hover tooltip only while the row is clipped', () => {
+  it('reveals a token-bucket hover detail, and the full clipped line when there is no billing', () => {
     vi.useFakeTimers()
     // jsdom lays nothing out; fake a row narrower than its content.
     vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(800)
@@ -226,21 +226,32 @@ describe('StatsLine', () => {
     const { source } = makeSource({ nodes: [assistant(1, 1)] })
     const view = render(<StatsLine {...props(source, { tokenUsage: tokenUsage(9_995, 5) })} />)
     expect(view.container.textContent).toContain('Cache hit 99.95%')
+    const detail = 'Uncached input '
+      + `${formatTokens(5, tEn)} tok · Cache read ${formatTokens(9_995, tEn)} tok · Cache write 0 tok · Output 1 tok`
     fireEvent.mouseEnter(view.container.firstElementChild!)
     act(() => { vi.advanceTimersByTime(499) })
     expect(view.container.querySelector('[role="tooltip"]')).toBeNull()
     act(() => { vi.advanceTimersByTime(1) })
-    expect(view.container.querySelector('[role="tooltip"]')?.textContent)
-      .toBe('1 turns · 1 steps | Cache hit 99.95% | Input 10K tok · Output 1 tok')
+    expect(view.container.querySelector('[role="tooltip"]')?.textContent).toBe(detail)
+
+    // No billing: the visible line has no token group, so the hover falls back
+    // to the full clipped line again.
+    const unbilled = render(<StatsLine {...props(source, {
+      tokenUsage: { uncachedInputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+    })} />)
+    fireEvent.mouseEnter(unbilled.container.firstElementChild!)
+    act(() => { vi.advanceTimersByTime(500) })
+    expect(unbilled.container.querySelector('[role="tooltip"]')?.textContent).toBe('1 turns · 1 steps')
   })
 
-  it('suppresses the tooltip while the row fits without truncation', () => {
+  it('keeps the token-bucket hover detail available even when the row fits', () => {
     vi.useFakeTimers()
     const { source } = makeSource({ nodes: [assistant(1, 1)] })
     const view = render(<StatsLine {...props(source)} />)
     fireEvent.mouseEnter(view.container.firstElementChild!)
     act(() => { vi.advanceTimersByTime(500) })
-    expect(view.container.querySelector('[role="tooltip"]')).toBeNull()
+    expect(view.container.querySelector('[role="tooltip"]')?.textContent)
+      .toBe('Uncached input 10 tok · Cache read 90 tok · Cache write 0 tok · Output 5 tok')
   })
 
   it('renders window latency and throughput beside the wall-time group', () => {

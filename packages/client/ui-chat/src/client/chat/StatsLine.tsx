@@ -126,9 +126,12 @@ export interface StatsLineProps {
 const StatsLineContent = memo(function StatsLineContent({
   groups,
   line,
+  detail,
 }: {
   readonly groups: readonly string[]
   readonly line: string
+  /** Richer hover copy (token bucket breakdown) when token activity exists. */
+  readonly detail?: string
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [truncated, setTruncated] = useState(false)
@@ -146,8 +149,11 @@ const StatsLineContent = memo(function StatsLineContent({
     return () => { observer.disconnect() }
   }, [measure])
   useLayoutEffect(measure, [line, measure])
+  // A token detail is always worth showing on hover, truncated or not; without
+  // one the tooltip only appears when the single line is ellipsis-clipped.
+  const disabled = detail === undefined && !truncated
   return (
-    <Tooltip label={line} side="top" delayMs={500} disabled={!truncated}>
+    <Tooltip label={detail ?? line} side="top" delayMs={500} disabled={disabled}>
       <div ref={rootRef} className={css.root}>
         {groups.map((group, i) => (
           <Fragment key={group}>
@@ -203,7 +209,20 @@ export const StatsLine = memo(function StatsLine({ useChat, useProjection, t }: 
       output: formatTokens(usage.outputTokens, t),
     }))
   }
+  // Hover detail: the four billing buckets behind the single billed-input
+  // figure, so hovering the stats row explains exactly what was billed even
+  // when the visible line is not clipped.
+  let detail: string | undefined
+  if (usage !== undefined
+    && (billedInputTokens(usage) > 0 || usage.outputTokens > 0)) {
+    detail = t('stats.tokenDetail', {
+      uncached: formatTokens(usage.uncachedInputTokens, t),
+      cacheRead: formatTokens(usage.cacheReadTokens, t),
+      cacheWrite: formatTokens(usage.cacheWriteTokens, t),
+      output: formatTokens(usage.outputTokens, t),
+    })
+  }
   const line = groups.join(' | ')
   if (groups.length === 0) return null
-  return <StatsLineContent groups={groups} line={line} />
+  return <StatsLineContent groups={groups} line={line} {...(detail === undefined ? {} : { detail })} />
 })

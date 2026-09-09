@@ -1,0 +1,12 @@
+{
+  "name": "fs-ext",
+  "version": "2.1.1",
+  "description": "Windows no-op stub for fs-ext. flock(2) is POSIX-only; DeepSeek Harness takes its Windows session write lock through a named kernel semaphore (lease.ts win32 branch), so this binding is never called on win32.",
+  "main": "index.js",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dummy-Shadow/deepseek-harness.git"
+  },
+  "private": true
+}
