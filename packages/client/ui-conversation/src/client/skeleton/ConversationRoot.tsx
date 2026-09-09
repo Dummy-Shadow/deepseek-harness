@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import type { SessionRegionComponent } from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { ConversationSlotProps, InputZone } from '../contract/slots.ts'
 import { conversationPhase } from '../contract/snapshot.ts'
@@ -203,7 +204,7 @@ function PaneResizeHandle({
 export function ConversationRoot({
   sessionId, useSession, useSessions, useSessionPendingInteraction,
   useSessionPanes, useWorkspaces, useConversation, useInput, useComposerBlock,
-  renderSlot, renderSlotChain, selectWorkspace, closePane, sessionRegion, t,
+  renderSlot, renderSlotChain, selectWorkspace, pin, closePane, sessionRegion, t,
 }: ConversationRootProps) {
   const session = useSession(s => s)
   const pendingInteraction = useSessionPendingInteraction(snapshot =>
@@ -469,8 +470,11 @@ export function ConversationRoot({
   }
   const SessionRegion = sessionRegion
   const panesEl = visiblePanes.map((id) => {
-    const title = sessionsById[id]?.displayTitle ?? id
     const pendingInteraction = pendingBySession.get(id)
+    // The header picker swaps which Session this pane shows: choices are every
+    // listed Session except the current one (the pane itself keeps its place).
+    const choices = [id, ...(Object.keys(sessionsById) as SessionId[])]
+      .filter((choice, index, list) => choice !== sessionId && list.indexOf(choice) === index)
     return (
       <aside
         key={id}
@@ -488,7 +492,27 @@ export function ConversationRoot({
           }}
         />
         <div className={css.paneHeader}>
-          <span className={css.paneTitle}>{title}</span>
+          <select
+            className={css.panePicker}
+            value={id}
+            aria-label={t('split.pick')}
+            onChange={(event) => {
+              const target = event.target.value as SessionId
+              if (target === id) return
+              closePane(id)
+              pin(target)
+            }}
+          >
+            {choices.map(choice => (
+              <option
+                key={choice}
+                value={choice}
+                disabled={choice !== id && panes.includes(choice)}
+              >
+                {sessionsById[choice]?.displayTitle ?? choice}
+              </option>
+            ))}
+          </select>
           <button
             type="button"
             className={css.paneClose}

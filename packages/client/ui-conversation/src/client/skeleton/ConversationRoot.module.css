@@ -385,14 +385,22 @@
   padding: 10px 12px 8px 16px;
 }
 
-.paneTitle {
+.panePicker {
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  border: none;
+  background: transparent;
   font-size: 13px;
   line-height: 20px;
   font-weight: 500;
   color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.panePicker:hover {
+  color: var(--dsw-alias-state-business-primary);
 }
 
 .paneClose {

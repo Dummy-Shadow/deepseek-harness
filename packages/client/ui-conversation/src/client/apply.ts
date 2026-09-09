@@ -241,6 +241,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
         sessionPanes: sessions.panes,
       },
       closePane: (id) => { sessions.closePane(id) },
+      pin: (id) => { sessions.pin(id) },
       selectWorkspace: async (workspaceId) => {
         const nextId = await workspaceNavigation.connectWorkspace(workspaceId)
         if (sessionId !== undefined && nextId !== sessionId) {

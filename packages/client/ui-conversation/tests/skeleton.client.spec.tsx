@@ -166,6 +166,7 @@ function mount(
   const inputActions = wiring.actions
   const panes = createSnapshotStore<readonly SessionId[]>([])
   const useSessionPanes = bindSnapshotSelector(panes)
+  const pin = vi.fn()
   const closePane = vi.fn()
   const stop = vi.fn()
   const open = vi.fn()
@@ -315,6 +316,7 @@ function mount(
     renderSlot,
     renderSlotChain,
     selectWorkspace: retargetWorkspace,
+    pin,
     closePane,
     sessionRegion: passthroughRegion,
     t,
@@ -322,7 +324,7 @@ function mount(
   const view = render(<ConversationRoot {...props} />)
   return {
     view, store, wiring, sink, retargetWorkspace, session, conversation, slotCalls, lineageOwners, seatOwners, open,
-    panes, closePane, chainOwners,
+    panes, pin, closePane, chainOwners,
     pickerOwner: () => pickerOwner,
     rerender: () => { view.rerender(<ConversationRoot {...props} />) },
   }
@@ -770,5 +772,18 @@ describe('split pane column', () => {
         else Object.defineProperty(Element.prototype, name, descriptor)
       }
     }
+  })
+
+  it('swaps which Session a pane shows through its header picker', () => {
+    const b = mount(sessionSnapshotOf())
+    act(() => { b.panes.set([sid('s2')]) })
+    b.rerender()
+    const pane = b.view.container.querySelector('[data-conversation-pane]')
+    const select = pane?.querySelector('select') as HTMLSelectElement
+    expect(select).not.toBeNull()
+    expect(select.value).toBe('s2')
+    fireEvent.change(select, { target: { value: 'root' } })
+    expect(b.closePane).toHaveBeenCalledWith(sid('s2'))
+    expect(b.pin).toHaveBeenCalledWith(sid('root'))
   })
 })
