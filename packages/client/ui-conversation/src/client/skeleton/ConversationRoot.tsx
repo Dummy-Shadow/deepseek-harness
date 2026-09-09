@@ -151,15 +151,10 @@ export function ConversationRoot({
   const summaryBlank = useSessions(s => sessionId === undefined ? undefined : s.byId[sessionId]?.blank)
   const workspaces = useWorkspaces(s => s)
   const panes = useSessionPanes(s => s)
-  // The visible pane is the retained side-pane Session that is not the current
-  // one; pinning the current Session hides the column (the split only reads a
-  // second Session beside the main one).
-  const paneId = sessionId === undefined || panes.length === 0
-    ? undefined
-    : panes.find(id => id !== sessionId)
-  const paneSummary = useSessions(s => paneId === undefined ? undefined : s.byId[paneId])
-  const panePendingInteraction = useSessionPendingInteraction(snapshot =>
-    paneId === undefined ? undefined : snapshot.get(paneId))
+  // Whole-store reads: the side-pane roster is arbitrary, so per-pane facts are
+  // derived in the render from full snapshots instead of per-session hooks.
+  const sessionsById = useSessions(s => s.byId)
+  const pendingBySession = useSessionPendingInteraction(s => s)
   // A plugin this package cannot import (ui-model-selection) says this session cannot
   // send; its reason is already localized by whoever raised it.
   const composerBlock = useComposerBlock(block => block)
@@ -391,36 +386,45 @@ export function ConversationRoot({
     </div>
   )
 
-  // The split pane is a read-only second Session column beside an active main
-  // conversation. Hidden while the pinned Session is current (nothing to read
-  // side by side), on the hero, or while a session settles; the pin itself
-  // survives so switching the main session reveals it again.
-  const activePane = paneId !== undefined && phase === 'active' ? paneId : undefined
-  paneWidth.current = activePane === undefined ? 0 : PANE_WIDTH
+  // Split panes: every retained side-pane Session except the current one,
+  // shown beside an active main conversation. Panes stay hidden on the hero or
+  // while a session settles; each pin survives so switching the main session
+  // reveals it again. Multiple panes stack to the right.
+  const visiblePanes = sessionId === undefined || phase !== 'active'
+    ? []
+    : panes.filter(id => id !== sessionId)
+  paneWidth.current = visiblePanes.length * PANE_WIDTH
   const SessionRegion = sessionRegion
-  const pane = activePane === undefined
-    ? null
-    : (
-      <aside className={css.pane} style={{ width: PANE_WIDTH }} data-conversation-pane="" aria-label={t('split.openLabel')}>
+  const panesEl = visiblePanes.map((id) => {
+    const title = sessionsById[id]?.displayTitle ?? id
+    const pendingInteraction = pendingBySession.get(id)
+    return (
+      <aside
+        key={id}
+        className={css.pane}
+        style={{ width: PANE_WIDTH }}
+        data-conversation-pane=""
+        aria-label={t('split.openLabel')}
+      >
         <div className={css.paneHeader}>
-          <span className={css.paneTitle}>{paneSummary?.displayTitle ?? activePane}</span>
+          <span className={css.paneTitle}>{title}</span>
           <button
             type="button"
             className={css.paneClose}
             aria-label={t('pane.close')}
-            onClick={() => { closePane(activePane) }}
+            onClick={() => { closePane(id) }}
           >
             ×
           </button>
         </div>
-        <SessionRegion sessionId={activePane}>
+        <SessionRegion sessionId={id}>
           <div className={css.paneBody} data-conversation-scroll="">
             {renderSlot('conversation.session', {})}
           </div>
           <div className={css.paneComposerSeat}>
             {renderSlotChain(
               'conversation.composer',
-              { sessionId: activePane, session: undefined, pendingInteraction: panePendingInteraction },
+              { sessionId: id, session: undefined, pendingInteraction },
               {
                 fallback: renderSlot('conversation.composer.bar', { variant: 'composer' }),
                 overlay: true,
@@ -430,9 +434,10 @@ export function ConversationRoot({
         </SessionRegion>
       </aside>
     )
+  })
 
   return (
-    <div ref={rootResizeRef} className={css.root} data-phase={phase} data-pane-open={activePane !== undefined || undefined}>
+    <div ref={rootResizeRef} className={css.root} data-phase={phase} data-pane-open={visiblePanes.length > 0 || undefined}>
       {sessionId === undefined ? null : renderSlot('conversation.session.header', {})}
       <div className={css.columns}>
         <div className={css.body}>
@@ -453,7 +458,7 @@ export function ConversationRoot({
             />
           ))}
         </div>
-        {pane}
+        {panesEl}
       </div>
     </div>
   )

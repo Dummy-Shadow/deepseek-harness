@@ -721,4 +721,25 @@ describe('split pane column', () => {
     hero.rerender()
     expect(hero.view.container.querySelector('[data-conversation-pane]')).toBeNull()
   })
+
+  it('retains several panes at once, each with its own transcript and composer', () => {
+    const b = mount(sessionSnapshotOf())
+    act(() => { b.panes.set([sid('s2'), sid('s3')]) })
+    b.rerender()
+    const panesEl = b.view.container.querySelectorAll('[data-conversation-pane]')
+    expect(panesEl.length).toBe(2)
+    expect(panesEl[0]!.textContent).toContain('s2')
+    expect(panesEl[1]!.textContent).toContain('s3')
+    for (const pane of panesEl) {
+      expect(pane.querySelector('[data-conversation-scroll]')).not.toBeNull()
+      expect(pane.querySelector('[data-composer-input]')).not.toBeNull()
+    }
+    const chainIds = b.chainOwners.map(owner => owner.sessionId)
+    expect(chainIds).toContain('s2')
+    expect(chainIds).toContain('s3')
+    // Closing one pane leaves the other retained.
+    const firstClose = panesEl[0]!.querySelector('button[aria-label="关闭分屏"]') as HTMLButtonElement
+    fireEvent.click(firstClose)
+    expect(b.closePane).toHaveBeenCalledWith(sid('s2'))
+  })
 })

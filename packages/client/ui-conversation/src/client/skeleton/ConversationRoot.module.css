@@ -322,6 +322,9 @@
   flex: 1;
   min-height: 0;
   min-width: 0;
+  /* Many panes can exceed the viewport; the band scrolls horizontally while
+     the main column keeps its own vertical scroll. */
+  overflow-x: auto;
 }
 
 .columns > .body {

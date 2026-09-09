@@ -45,14 +45,14 @@ describe('SplitPaneAction', () => {
     expect(closePane).toHaveBeenCalledWith(sid('s1'))
   })
 
-  it('replaces another retained pane before pinning the header Session', () => {
+  it('pins the header Session alongside panes already retained', () => {
     const pin = vi.fn()
     const closePane = vi.fn()
     const view = render(
       <SplitPaneAction {...actionProps(sid('s2'), [sid('s1')], { pin, closePane })} />,
     )
     fireEvent.click(view.getByRole('button'))
-    expect(closePane).toHaveBeenCalledWith(sid('s1'))
+    expect(closePane).not.toHaveBeenCalled()
     expect(pin).toHaveBeenCalledOnce()
   })
 })

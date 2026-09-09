@@ -23,10 +23,9 @@ export type SplitPaneActionProps =
   & InjectFace<SplitPaneActionInjected>
 
 /**
- * Render the split trigger. One pane at a time: when the header's own Session
- * is already the pane the trigger closes it; otherwise it replaces any other
- * retained pane with this Session. Staying visible keeps the affordance
- * reachable across repeated split/close rounds.
+ * Render the split trigger. Pinning is additive: each Session keeps its own
+ * toggle, so several Sessions can be retained as panes at once; when the
+ * header's own Session is already a pane the trigger closes just that one.
  * @param props - the current Session identity, the pane roster, and the actions.
  * @returns the trigger.
  */
@@ -47,8 +46,6 @@ export function SplitPaneAction({
           closePane(sessionId)
           return
         }
-        const other = panes.find(id => id !== sessionId)
-        if (other !== undefined) closePane(other)
         pin()
       }}
     >
