@@ -20,10 +20,10 @@
 
 ## 二、进行中 🔄
 - [ ] **B3 分屏自建**（branch `feature/split-pane`；**续做前先读 `SPLIT-PANE-HANDOFF.md`**）
-  - [x] Layer A：`ISessions.pin/closePane` + service `panes` 保留集（已提交 `a8ac476`，client typecheck 通过）
-  - [ ] Layer B：`SessionRegionProvider`（ui-renderer bindings）+ 单测
-  - [ ] Layer C：ConversationRoot 右栏只读 pane + 分屏按钮 + root split store
-  - [ ] 收尾：test:gui → 重启 Web 肉眼验收
+  - [x] Layer A：`ISessions.pin/closePane` + service `panes` 保留集（`a8ac476`，client typecheck 通过）
+  - [x] Layer B：`SessionRegionProvider`（ui-renderer bindings）+ 单测（`684d5f0`）；消费入口 = renderer service 面 `UiRendererService.sessionRegion`（`7184cee`）—— 决策记录见 HANDOFF §8
+  - [x] Layer C：`ISessions.panes` 只读 observable（`f5c6b00`）+ 右栏只读 pane（region 复用 `conversation.session` 子树）+ header 分屏按钮 + pane==current 隐藏（`c073878`、`4668b56`；typecheck + ui-conversation/ui-chat/ui-tool/ui-renderer/session-controller 目标 vitest 全绿）
+  - [ ] 收尾：test:gui 仅余 Windows `directory-picker-browse` host 路径预置失败（与本改无关）；待重启 Web 肉眼验收分屏 → 通过后合回主工作树并补 Agent Note
 
 ## 三、待你拍板 / 待办 🕐
 - [ ] kb-rag Python 依赖（A=自动装 / B=手动 pip / C=不动=当前默认）

@@ -6,8 +6,13 @@
 - 仓库：`D:\soft\deepseek-harness-penguin\deepseek-harness`（DeepSeek Harness fork，基座 **dsh-v0.1.3-alpha.2**）。
 - 分支：**`feature/split-pane`**；关键提交：
   - `a04df32` WIP 检查点（0.1.3 适配：concurrency/research preset、token 悬停细分、fs-ext stub、科研技能蓝本等，全部已验证）；
-  - `a8ac476` **Layer A**：`ISessions.pin/closePane` 已实现并通过 `pnpm run typecheck:contracts-ready`。
+  - `a8ac476` **Layer A**：`ISessions.pin/closePane` 已实现并通过 `pnpm run typecheck:contracts-ready`；
+  - `684d5f0` **Layer B provider**：`SessionRegionProvider`（ui-renderer bindings 内部组件 + 单测）；
+  - `7184cee` **Layer B wiring**：renderer service 面 `UiRendererService.sessionRegion` 暴露该组件；
+  - `f5c6b00` **Layer C data**：`ISessions.panes` 只读 observable；
+  - `c073878` / `4668b56` **Layer C UI**：ConversationRoot 右栏只读 pane（region 复用 `conversation.session` 子树）+ header 分屏按钮 + hairline 修正与 GUI bench 桩。
 - 运行基座不受影响（当前 Web 未运行；重启用 `启动-DeepSeek-Harness.bat`，仓库根即有）。
+- 注意：`pnpm run test:gui` 本地仍有一个与本改动无关的预置 Windows 失败 `packages/host/directory-picker-browse`（路径正斜杠断言）。
 
 ## 1. 目标
 在 Web GUI 实现“会话分屏”：主会话右侧并排显示**第二个完整会话**。既定顺序先做**只读 pane（后台/只读跟随）**，交互（第二 composer/审批）留后续。
@@ -47,13 +52,9 @@
    - 已知 session 的 region 内，`useScopeBinding()` 拿到该 id 的 binding（key 正确）；
    - 未知 id 不崩、hooks 顺序稳定；
    - current 切换不影响已渲染 region 的绑定（验证绑定来自 resolve 而非 current）。
-3. **消费入口决策（先读再定，别拍脑袋）**：feature 包不许 import `ui-renderer` 的值（`packages/client/AGENTS.md`）。候选：
-   - (i) 走 `PropsRuntime` 新标准座位（要动 `ui-slots` 注册 + 所有 owner 类型，动静大）；
-   - (ii) 由 `ui-session` 的 inject 面暴露“region 渲染函数”（apply 闭包持 ctx → 在 register 时把 `ui-renderer` 的 region 作为值注入）——**倾向此路**；
-   - (iii) 允许 `ui-conversation` 依赖 `ui-renderer`（破坏分层，不推荐）。
-   先读 `ui-conversation/src/client/apply.ts` 的注入面与 `contract/slots.ts` 的 owner props 再选 (i)/(ii)。
+3. **消费入口决策（先读再定，别拍脑袋）**：feature 包不许 import `ui-renderer` 的值（`packages/client/AGENTS.md`）。候选 (i)/(ii)/(iii) 详见下——**已实现并追记于 §8：最终走 cordis service 桥接，(i)/(ii)/(iii) 均未采用**。
 
-## 4. Layer C：右栏只读 pane + 按钮
+## 4. Layer C：右栏只读 pane + 按钮（草案；落地以 §0 提交 + §8 为准，createSplitStore 与候选 A/B 的表述已被实现取代）
 - `packages/client/ui-conversation/src/client/skeleton/ConversationRoot.tsx`（主 body 渲染区 ~:163-205/:372-394）：在 body 旁按 pane 状态渲染右栏容器（CSS：双列 flex/grid，窄屏降级隐藏），右栏内用 Layer B 的 region 包住只读会话视图。
 - `packages/client/ui-conversation/src/client/stores.ts`：加 **root 级** `createSplitStore()`（defineStore 模式，`createXXXStore()` 工厂；**不要**放 per-session `conversationStore`——pane 状态要跨 current 切换存活）。状态：`{ paneSessionId?: string }` + actions：`openPane(id)`（调 `ctx.sessions.pin(id)`）、`closePane()`（`closePane(id)`）。
 - 按钮：注册进 `conversation.session.header.actions`（list 槽，声明 `packages/client/ui-conversation/src/client/contract/slots.ts:131-135/207-210`；范式照抄 `ui-jobs/src/client/index.ts:30-41`）。按钮只负责“把当前会话加入 pane”，写方在 apply 闭包经注入服务调 store/`sessions`。
@@ -72,9 +73,17 @@
 - github.com 直连被重置：下载走 `codeload.github.com`；git 需代理时用 `-c http.proxy=http://127.0.0.1:12334`（该代理当前可能不可用，直连 api/codeload 即可）。
 - hook 顺序/ExactOptionalPropertyTypes：region 占位分支要稳定，勿显式传 `undefined` 给 optional prop。
 - 不要 import 其它 feature 包组件；跨包只能 slots/services/`import type`。
+- ui-theme 扫描门禁：neutral border 必须 hairline（`0.5px solid var(--dsw-alias-border-*)`），分隔线用 0.5px 高的 background hairline；新加这类规则要跑 `packages/client/ui-theme/tests/elevation-styles.client.spec.ts`。
 
 ## 7. 参考链接（仓库相对路径）
 - 台账：`ROADMAP-LOCAL.md`
 - 升级方案：`DSH-迭代方案.md`
 - 开发/纪律：根 `AGENTS.md`、`packages/client/AGENTS.md`、`docs/subsystems/web-client.md`、`docs/subsystems/slots.md`
 - 代码锚点见 §3.1（以当前分支实际行号为准，先行 `git log --oneline -1` 确认在 `feature/split-pane`）。
+
+## 8. Layer B/C 决策记录（实现后追记，勿重走弯路）
+- 消费入口：**不做** ui-slots `SlotMap/PropsRenderSlots` 公开 seat 扩面（会被判为改 DSH 本体、波及全部 owner）；**不做** ui-session inject 面下发（inject 禁 ReactNode producer + ui-session 不能 value 依赖 ui-renderer）。选定 **cordis service 桥接**：ui-renderer 在自有 service 面加 `sessionRegion`（插件内加性），ui-conversation `inject` 加 `'uiRenderer'`，`apply` 闭包取之并在注册时用 `conversationRootWithRegion`（`skeleton/ConversationRootWithRegion.tsx`）包装为普通 prop 传入（值跨包走 service，属合规通道）。凡 mount ui-conversation `apply` 的 GUI bench 都要先 `ctx.provide('uiRenderer', { mount, sessionRegion })`。
+- pane 状态 = **sessions service 的 `panes`**（Layer A 保留集），新增只读 observable `ISessions.panes`（`f5c6b00`，实现含 TestSessions 镜像与 `sessions-service.client.spec.ts` 用例）；UI 不建 root split store。根 hook **不**做进 `GlobalStandardProps`（会造成全 client owner 类型涟漪），改为 ConversationRoot / 分屏按钮各自的 register `inject.hooks.sessionPanes`（ConversationInjected 包内私有）。
+- pane 内容 = **region 复用 `conversation.session` 子树**（只读 transcript，无 composer/header）；`activePane` = `panes` 中 ≠ current 的第一个；`pane==current`/hero/settling 时右栏隐藏但 pin 保留；分屏按钮（`SplitPaneAction`，id `split-pane`，order 30）仅在无 pin 时显示，单 pane 一次一个；关闭 = `closePane(activePane)`（ConversationInjected）。
+- 主列宽度轴：pane 打开时把固定 `PANE_WIDTH=400` 从列宽扣除（`paneWidth` ref + `columnWidth()`），`ConversationRoot.module.css` 加 `.columns/.pane/.paneBody`；border 用 hairline。
+- 未决/收尾：待重启 Web 肉眼验收（开两会话→header 分屏→右栏出现→切 current 不丢→关闭可回收）；通过后合回主工作树并补 Agent Note。
