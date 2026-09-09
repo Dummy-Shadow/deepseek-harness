@@ -24,6 +24,7 @@
   - [x] Layer B：`SessionRegionProvider`（ui-renderer bindings）+ 单测（`684d5f0`）；消费入口 = renderer service 面 `UiRendererService.sessionRegion`（`7184cee`）—— 决策记录见 HANDOFF §8
   - [x] Layer C：`ISessions.panes` 只读 observable（`f5c6b00`）+ 右栏只读 pane（region 复用 `conversation.session` 子树，`data-conversation-scroll` 外包滚动）+ header 分屏按钮（单 pin 可反复/退出）（`c073878`、`4668b56`、`c2a1a76`；typecheck + 目标 vitest 全绿）
   - [x] 收尾：肉眼验收通过（右栏可滚动、无报错、可多次分屏/退出）；test:gui 仅余与本改无关的 Windows `directory-picker-browse` host 路径失败
+  - [x] 分屏增强（肉眼验收通过）：右栏可发消息/审批（`3fd94b4`）、多 pane（`839ed18`）、pane 宽度可拖拽（`44f6dd4`/`0290ec3`）、pane 会话选择器（`2e47947`）
   - [ ] 合并/发布：把 `feature/split-pane` 合回主工作树（Agent Note 已备：`.agents/notes/implemented/feature/2026-09-10-session-split-pane.md`），合并前用全量 `test:coverage` 复核 per-file 100%
 
 ## 三、待你拍板 / 待办 🕐

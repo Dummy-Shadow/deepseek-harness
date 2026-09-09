@@ -10,7 +10,7 @@ The Session Controller already retained out-of-band sessions through `pin`/`clos
 
 ## Decision
 
-Show one retained side-pane Session in a fixed right column beside the main conversation. The pane is read-only (its own composer and approval flow are deferred). A header action on the current Session pins it as the single pane; pinning again replaces, and closing releases the pin.
+Retained side-pane Sessions render as **fully interactive right-hand columns** beside the main conversation: each pane shows the pinned Session's real transcript plus its own composer, so sending, stopping, and approval/question takeovers work inside the pane. Pinning is additive (several panes at once), each pane width is user-draggable, and each pane can be retargeted to any other open Session from its header.
 
 Three narrow, additive surfaces make this work; none widens the shared slot framework.
 
@@ -18,23 +18,23 @@ Three narrow, additive surfaces make this work; none widens the shared slot fram
 
 2. **Observable pane roster.** [`ISessions.panes`](../../../../packages/api/session-controller/src/client/contract/sessions.ts) is a read-only observable snapshot of retained side-pane ids, published by `pin`/`closePane` in [`service.ts`](../../../../packages/api/session-controller/src/client/sessions/service.ts). The roster is deliberately *not* a root `GlobalStandardProps` hook (that would ripple through every client owner); it rides each consumer's own register `inject.hooks.sessionPanes` inside ui-conversation.
 
-3. **Pane presentation in ui-conversation.** [`ConversationRoot`](../../../../packages/client/ui-conversation/src/client/skeleton/ConversationRoot.tsx) renders a `.columns` flex row: the existing main column plus a fixed 400px pane when `panes` contains a Session different from the current one (hidden while the pinned Session is current, on the hero, or while settling). The pane reuses the `conversation.session` subtree inside a `SessionRegion`, so the second Session's transcript is the real registered view (read-only: no composer/header are mounted in the pane). The pane scroll container carries `data-conversation-scroll` and `overflow-y: auto` so Chat hands its scrolling to the pane box (its own inner virtual scroller cannot be bounded in a split column). [`SplitPaneAction`](../../../../packages/client/ui-conversation/src/client/skeleton/SplitPaneAction.tsx) contributes to `conversation.session.header.actions` (`id: 'split-pane'`): always visible, single-pin semantics — already-pinned current closes, otherwise it replaces any other pin then pins the current Session.
+3. **Pane presentation in ui-conversation.** [`ConversationRoot`](../../../../packages/client/ui-conversation/src/client/skeleton/ConversationRoot.tsx) renders a `.columns` flex row: the existing main column plus one column per retained pane. Each pane wraps its content in a `SessionRegion` for the pinned id, so every occupant derives its kit from that Session: the transcript is the registered `conversation.session` view, and the pane composer is the same `conversation.composer` chain the main column uses (owner `sessionId: paneId`, `session: undefined`, pending taken from the root pending snapshot — chain selectors only read `pendingInteraction`, while the elected component reads the pinned binding). Pane scroll containers carry `data-conversation-scroll` and `overflow-y: auto` so Chat hands scrolling to the pane box (its own inner virtual scroller cannot be bounded in a split column). Pane headers are a Session picker (retarget = `closePane(old)` + `pin(new)`); each pane has a left-edge col-resize handle (drag left widens, clamped 280–720px, persisted per Session id). [`SplitPaneAction`](../../../../packages/client/ui-conversation/src/client/skeleton/SplitPaneAction.tsx) contributes to `conversation.session.header.actions` (`id: 'split-pane'`): always visible and additive — an already-pinned current closes just itself, otherwise it pins the current Session alongside any existing panes.
 
 ## Behavior
 
-- Main width axis subtracts the fixed pane width while the pane is open, so the shared chat-width clamp still targets the main column.
-- `pane == current` → pane hidden but the pin survives; switching the current Session reveals it again.
-- Repeated split/close rounds work (the header action stays visible and acts as a toggle/replace).
+- Every retained pane (except one equal to the current Session) renders as a fully interactive column: registered transcript view plus its own composer chain, so send/stop and approval/question takeovers live in the pane. Pane headers offer a Session picker to retarget a pane.
+- Pinning is additive (`SplitPaneAction` toggles each Session individually), so several panes can be open at once; each can be closed independently.
+- Pane widths are draggable (left edge, drag-left widens; 280–720px) and persisted per Session id in `localStorage`; the main-column width axis subtracts the total pane width so the shared chat clamp still targets the main column.
+- `pane == current` → that pane is hidden but the pin survives; switching the current Session reveals it again. Panes stay hidden on the hero or while a session settles.
 - Retained panes keep their frozen view across list removal until `closePane` (Layer A retention semantics).
 
 ## Testing and coverage
 
 - `SessionRegionProvider` unit tests (`packages/client/ui-renderer/tests/session-region.client.spec.tsx`): resolve-not-current, roster-bump stability, unresolvable id renders nothing, missing adapter fails loud, StrictMode-safe.
 - Side-pane roster cases in `packages/api/session-controller/tests/sessions-service.client.spec.ts` plus `TestSessions` mirror (`packages/test-support/client-runtime/src/sessions.ts`).
-- Split column/hide-when-current/close coverage in `packages/client/ui-conversation/tests/skeleton.client.spec.tsx`; `SplitPaneAction` toggle/replace coverage in `packages/client/ui-conversation/tests/split-pane-action.client.spec.tsx`.
+- Split column/hide-when-current/close coverage, multi-pane, pane drag direction/persistence, and picker retarget coverage in `packages/client/ui-conversation/tests/skeleton.client.spec.tsx`; `SplitPaneAction` additive toggle coverage in `packages/client/ui-conversation/tests/split-pane-action.client.spec.tsx`.
 - Client `typecheck:contracts-ready` clean; `pnpm run test:gui` green apart from a pre-existing Windows host path expectation (`packages/host/directory-picker-browse`). Full per-file coverage gate is CI-owned and was last exercised on the whole suite.
 
 ## Deferred
 
-- A second composer / approval flow inside the pane (the pane stays read-only).
-- Multiple simultaneous panes (currently exactly one), resizing the pane, and a session picker for choosing which session the pane shows.
+- Cosmetic follow-ups only: main-column minimum width when many panes are open (the `.columns` band already scrolls horizontally) and tighter in-pane width tuning.
