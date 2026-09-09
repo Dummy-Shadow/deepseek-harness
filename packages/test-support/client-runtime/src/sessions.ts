@@ -198,7 +198,7 @@ export class TestSessions implements ISessions {
   /** Calls observed on the service-level face, newest last. */
   readonly calls: {
     method: 'create' | 'open' | 'openSubagent' | 'setSubagentCatalogOpen' | 'refreshSubagents'
-      | 'clear' | 'refresh' | 'search' | 'fork'
+      | 'clear' | 'refresh' | 'search' | 'fork' | 'pin' | 'closePane'
     args: unknown[]
   }[] = []
 
@@ -441,6 +441,17 @@ export class TestSessions implements ISessions {
       draft.current = id
       draft.currentAddress = undefined
     })
+  }
+
+  /** Pin a fixture open as a side pane without selecting it. */
+  pin(id: SessionId): void {
+    this.calls.push({ method: 'pin', args: [id] })
+    this.require(id)
+  }
+
+  /** Release a side-pane pin (fixture keeps its scope while listed). */
+  closePane(id: SessionId): void {
+    this.calls.push({ method: 'closePane', args: [id] })
   }
 
   /** Open an existing fixture through its catalog address. */

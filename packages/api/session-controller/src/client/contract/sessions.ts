@@ -43,6 +43,20 @@ export interface ISessions {
    */
   open(id: SessionId): void
   /**
+   * Pin a listed session open as a side pane without selecting it. Mints its
+   * scope when absent, starts (or keeps) its live event window, and retains
+   * its scope across list removals like the staged session until `closePane`.
+   * @param id - listed session id; unknown ids no-op.
+   */
+  pin(id: SessionId): void
+  /**
+   * Release a side-pane pin. The session stops being retained for pane
+   * display; when it is neither pinned nor the current selection its scope
+   * and live window close.
+   * @param id - pinned session id.
+   */
+  closePane(id: SessionId): void
+  /**
    * Open a healthy catalog child through its exact direct-parent address.
    * @param address - catalog-derived parent and child ids.
    */

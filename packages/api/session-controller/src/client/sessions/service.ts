@@ -10,9 +10,11 @@
  * the event window and deferred teardown key off the STAGED session, which
  * follows `list.current` exactly. Staging is the open signal: the window
  * opens ⟺ the session is on stage (the stage is `current`; the staged
- * state can widen to a multi-pane list later). A session leaving the list
- * tears its scope down immediately unless it is the staged one, whose scope
- * survives frozen (read-only view) until the stage moves on.
+ * state can widen to a multi-pane list later). Side-pane sessions opened
+ * through `pin` share the manager's multi-session event machinery and stay
+ * retained until `closePane`. A session leaving the list
+ * tears its scope down immediately unless it is staged or pinned, whose
+ * scopes survive frozen (read-only view) until the stage moves on.
  */
 import type { Context, Fiber } from '@deepseek-ai/cordis'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
@@ -213,6 +215,8 @@ export class ClientSessions implements ISessions {
   private watched: SessionId | undefined
   /** Removed-while-staged sessions whose teardown waits for the stage to move away. */
   private readonly deferredRemovals = new Set<SessionId>()
+  /** Side-pane sessions kept open alongside the current one (see `pin`/`closePane`). */
+  private readonly panes = new Set<SessionId>()
 
   /**
    * @param ctx - client root context (scope fibers mount under it).
@@ -269,6 +273,38 @@ export class ClientSessions implements ISessions {
    */
   open(id: SessionId): void {
     this.manager.select(id)
+  }
+
+  /**
+   * Open a listed session as a side pane without selecting it. Pane sessions
+   * share the manager's multi-session event machinery; the scope is retained
+   * (like the staged one) across list removals until `closePane`.
+   * @param id - listed session id; unknown ids no-op.
+   */
+  pin(id: SessionId): void {
+    const snapshot = this.list.getSnapshot()
+    if (snapshot.current !== id && snapshot.byId[id] === undefined) return
+    this.panes.add(id)
+    const record = this.resolve(id)
+    // resolve() may have minted the scope already; open() is idempotent.
+    if (record !== undefined) void record.session.open()
+  }
+
+  /**
+   * Release a side-pane pin. When the session is neither pinned nor the
+   * current selection, tear its scope down now (mirrors the prune path); a
+   * deferred removal recorded while it was pinned is cancelled first so a
+   * later stage sweep cannot double-dispose the record.
+   * @param id - pinned session id.
+   */
+  closePane(id: SessionId): void {
+    this.panes.delete(id)
+    if (id === this.watched) return
+    this.deferredRemovals.delete(id)
+    const record = this.scopes.get(id)
+    if (record === undefined) return
+    this.scopes.delete(id)
+    this.startScopeDrop(id, record)
   }
 
   /**
@@ -646,12 +682,12 @@ export class ClientSessions implements ISessions {
     this.pruneScopes()
   }
 
-  /** Tear down scope + instance for no-longer-eligible sessions off stage; the staged one defers until the stage moves. */
+  /** Tear down scope + instance for no-longer-eligible sessions off stage; staged and pinned ones defer until released. */
   private pruneScopes(): void {
     if (this.list.getSnapshot().phase === 'pending') return
     for (const [id, record] of this.scopes) {
       if (this.eligible(id)) continue
-      if (id === this.watched) {
+      if (id === this.watched || this.panes.has(id)) {
         this.deferredRemovals.add(id)
         continue
       }
@@ -696,10 +732,10 @@ export class ClientSessions implements ISessions {
   /** Run deferred teardowns whose session is no longer staged (called when the stage moves). */
   private sweepDeferred(): void {
     for (const id of [...this.deferredRemovals]) {
-      /* v8 ignore next -- defensive: only the staged id ever defers, and every
-       * stage move sweeps first, so the set cannot contain the id the stage just
-       * moved to; kept as a guard against future extra sweep call sites. */
-      if (id === this.watched) continue
+      /* v8 ignore next -- defensive: only staged/pinned ids ever defer, and
+       * every stage move sweeps first, so the set cannot contain the id the
+       * stage just moved to; kept as a guard against future sweep call sites. */
+      if (id === this.watched || this.panes.has(id)) continue
       // Eligible again? (A re-added id cancels the deferred teardown.)
       if (this.eligible(id)) {
         this.deferredRemovals.delete(id)
