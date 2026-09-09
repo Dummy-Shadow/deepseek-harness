@@ -47,6 +47,7 @@ function sessionFakeFor() {
 
 async function bench() {
   const runtime = await SlotTestRuntime.create()
+  runtime.ctx.provide('uiRenderer', { mount: vi.fn(), sessionRegion: ({ children }: { children: unknown }) => children } as never)
   runtime.ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   const layout = { openDetails: vi.fn(), closeDetails: vi.fn() }
   runtime.ctx.provide('layout', layout as never)
