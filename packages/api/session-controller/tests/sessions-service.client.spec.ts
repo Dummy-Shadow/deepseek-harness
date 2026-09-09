@@ -117,7 +117,7 @@ describe('side-pane roster', () => {
     await feedList(b, [{ id: 's1' }, { id: 's2' }])
     const panes = b.svc.panes
     const initial = panes.getSnapshot()
-    const seen: readonly SessionId[][] = []
+    const seen: (readonly SessionId[])[] = []
     const off = panes.subscribe(() => { seen.push(panes.getSnapshot()) })
 
     b.svc.pin(sid('s2'))
