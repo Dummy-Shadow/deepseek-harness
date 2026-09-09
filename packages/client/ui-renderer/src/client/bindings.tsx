@@ -141,3 +141,31 @@ export function ScopeProvider({
   const binding = observableHook(adapter.current)(value => value)
   return <ScopeBindingContext.Provider value={binding}>{children}</ScopeBindingContext.Provider>
 }
+
+/**
+ * Bind one subtree to a resolved non-current Session instead of the scope's
+ * current selection. The pane target must already be materialized by the
+ * scope adapter (a pinned Session): while it resolves, its slot outlets render
+ * against the target binding; an unresolvable id renders nothing rather than
+ * leaking the current Session into the subtree. Hook order is unchanged across
+ * the resolvable/unresolvable boundary (only child mounting differs).
+ * @param props - target Session id and the subtree to rebind.
+ * @returns the subtree under the resolved binding, or null while it is absent.
+ */
+export function SessionRegionProvider({
+  sessionId,
+  children,
+}: {
+  sessionId: string
+  children: ReactNode
+}) {
+  const host = useHost()
+  observableHook(host.scopeRevision)(value => value)
+  const adapter = host.scope('session')
+  if (adapter === undefined) {
+    throw new SlotAssemblyError("session region rendered without an installed 'session' scope adapter")
+  }
+  const binding = adapter.resolve(sessionId)
+  if (binding === undefined) return null
+  return <ScopeBindingContext.Provider value={binding}>{children}</ScopeBindingContext.Provider>
+}
