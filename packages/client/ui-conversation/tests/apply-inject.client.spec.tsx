@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ISession } from '@deepseek-ai/dsh-api-session-controller/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
@@ -33,6 +34,7 @@ function sessionFakeFor() {
 
 async function bench() {
   const runtime = await SlotTestRuntime.create()
+  runtime.ctx.provide('uiRenderer', { mount: vi.fn(), sessionRegion: ({ children }: { children: ReactNode }) => children } as never)
   const rootUpload = vi.fn(() => Promise.resolve({
     ok: true as const,
     value: {

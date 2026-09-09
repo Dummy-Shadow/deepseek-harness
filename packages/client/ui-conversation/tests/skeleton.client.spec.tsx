@@ -87,6 +87,9 @@ type SessionSlotProps = ComponentProps<typeof ConversationSession>
 const useChat: SessionSlotProps['useChat'] = () => { throw new Error('unused') }
 const useTrajectory: SessionSlotProps['useTrajectory'] = () => { throw new Error('unused') }
 
+/** Renderer-region passthrough: split tests assert the wrapped pane, not the rebinding. */
+const passthroughRegion: ConversationRootProps['sessionRegion'] = ({ children }) => <>{children}</>
+
 function workspace(id = 'w1'): WorkspaceView {
   return {
     workspaceId: wid(id), path: `/projects/${id}`, title: id, sessionIds: [],
@@ -161,6 +164,9 @@ function mount(
   const { wiring, sink } = fakeWiring()
   const useInput = bindSnapshotSelector(wiring.state)
   const inputActions = wiring.actions
+  const panes = createSnapshotStore<readonly SessionId[]>([])
+  const useSessionPanes = bindSnapshotSelector(panes)
+  const closePane = vi.fn()
   const stop = vi.fn()
   const open = vi.fn()
   const slotCalls: string[] = []
@@ -295,17 +301,21 @@ function mount(
     useSessionPendingInteraction,
     useWorkspaces: bindSnapshotSelector(workspaces),
     useProjection: (() => undefined),
+    useSessionPanes,
     useComposerBlock: select => select(options.composerBlock),
     useInput,
     inputActions,
     renderSlot,
     renderSlotChain,
     selectWorkspace: retargetWorkspace,
+    closePane,
+    sessionRegion: passthroughRegion,
     t,
   }
   const view = render(<ConversationRoot {...props} />)
   return {
     view, store, wiring, sink, retargetWorkspace, session, conversation, slotCalls, lineageOwners, seatOwners, open,
+    panes, closePane,
     pickerOwner: () => pickerOwner,
     rerender: () => { view.rerender(<ConversationRoot {...props} />) },
   }
@@ -670,5 +680,32 @@ describe('ConversationRoot resident composer', () => {
   it('hero phase renders no width handles (no transcript to size)', () => {
     const b = mount(sessionSnapshotOf({ blank: true }))
     expect(b.view.container.querySelector('[data-width-handle]')).toBeNull()
+  })
+})
+
+describe('split pane column', () => {
+  it('shows a retained non-current Session in the right pane and closes it on request', () => {
+    const b = mount(sessionSnapshotOf())
+    expect(b.view.container.querySelector('[data-conversation-pane]')).toBeNull()
+    act(() => { b.panes.set([sid('s2')]) })
+    b.rerender()
+    const pane = b.view.container.querySelector('[data-conversation-pane]')
+    expect(pane).not.toBeNull()
+    expect(pane?.textContent).toContain('s2')
+    expect(b.slotCalls).toContain('conversation.session.header')
+    fireEvent.click(b.view.getByRole('button', { name: '关闭分屏' }))
+    expect(b.closePane).toHaveBeenCalledWith(sid('s2'))
+  })
+
+  it('hides while the pinned Session is current and on the blank hero', () => {
+    const active = mount(sessionSnapshotOf())
+    act(() => { active.panes.set([SID]) })
+    active.rerender()
+    expect(active.view.container.querySelector('[data-conversation-pane]')).toBeNull()
+
+    const hero = mount(sessionSnapshotOf({ blank: true }))
+    act(() => { hero.panes.set([sid('s2')]) })
+    hero.rerender()
+    expect(hero.view.container.querySelector('[data-conversation-pane]')).toBeNull()
   })
 })

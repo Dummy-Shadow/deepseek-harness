@@ -4,14 +4,17 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
+import type { SessionRegionComponent } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type { ConversationSlotProps, InputZone } from '../contract/slots.ts'
 import { conversationPhase } from '../contract/snapshot.ts'
 import { HeroShell, WorkspaceChip, workspaceLabel } from './EmptyHero.tsx'
 import css from './ConversationRoot.module.css'
 
-/** Full props composed from the slot contract. */
-export type ConversationRootProps = ConversationSlotProps
+/** Full props composed from the slot contract plus the renderer session-region seat. */
+export type ConversationRootProps =
+  ConversationSlotProps
+  & { sessionRegion: SessionRegionComponent }
 
 /** localStorage key for the dragged transcript width preference (px). */
 const WIDTH_PREF_KEY = 'dsh.conversation.contentWidth'
@@ -22,6 +25,8 @@ const CONTENT_MIN = 640
  * larger dragged width would push its own handles off the column and leave no
  * way to drag back. */
 const CONTENT_EDGE_BUDGET = 176
+/** Fixed right-pane width when a split view is open (read-only Session column). */
+const PANE_WIDTH = 400
 
 /** Reads the persisted width preference; durable-storage boundary, so a
  * missing or corrupt value resolves to "no preference".
@@ -130,8 +135,8 @@ function WidthHandle(props: {
 
 export function ConversationRoot({
   sessionId, useSession, useSessions, useSessionPendingInteraction,
-  useWorkspaces, useConversation, useInput, useComposerBlock,
-  renderSlot, renderSlotChain, selectWorkspace, t,
+  useSessionPanes, useWorkspaces, useConversation, useInput, useComposerBlock,
+  renderSlot, renderSlotChain, selectWorkspace, closePane, sessionRegion, t,
 }: ConversationRootProps) {
   const session = useSession(s => s)
   const pendingInteraction = useSessionPendingInteraction(snapshot =>
@@ -145,6 +150,14 @@ export function ConversationRoot({
   const cwd = useSessions(s => sessionId === undefined ? undefined : s.byId[sessionId]?.cwd)
   const summaryBlank = useSessions(s => sessionId === undefined ? undefined : s.byId[sessionId]?.blank)
   const workspaces = useWorkspaces(s => s)
+  const panes = useSessionPanes(s => s)
+  // The visible pane is the retained side-pane Session that is not the current
+  // one; pinning the current Session hides the column (the split only reads a
+  // second Session beside the main one).
+  const paneId = sessionId === undefined || panes.length === 0
+    ? undefined
+    : panes.find(id => id !== sessionId)
+  const paneSummary = useSessions(s => paneId === undefined ? undefined : s.byId[paneId])
   // A plugin this package cannot import (ui-model-selection) says this session cannot
   // send; its reason is already localized by whoever raised it.
   const composerBlock = useComposerBlock(block => block)
@@ -177,15 +190,23 @@ export function ConversationRoot({
     seatObserver.current.observe(scroller)
   }, [])
 
-  // Publishes the column's live width as --dsh-conversation-column-width so
+  // Publishes the main column's live width as --dsh-conversation-column-width so
   // the shared width axis can adapt (see the .root CSS), and re-clamps a
   // dragged preference against the shrunken column WITHOUT rewriting the
   // stored preference — widening the window restores it (the AppFrame
-  // sidebar-drag rule). Same callback-ref pattern as the seat observer.
+  // sidebar-drag rule). Same callback-ref pattern as the seat observer. An
+  // open split pane reserves a fixed slice of the root column, so the axis
+  // reflects the main column only.
   const rootEl = useRef<HTMLDivElement | null>(null)
   const rootObserver = useRef<ResizeObserver | null>(null)
+  const paneWidth = useRef(0)
+  const columnWidth = useCallback((): number => {
+    const root = rootEl.current
+    if (root === null) return 0
+    return Math.max(0, root.offsetWidth - paneWidth.current)
+  }, [])
   const publishWidths = useCallback((root: HTMLDivElement): void => {
-    const column = root.offsetWidth
+    const column = columnWidth()
     root.style.setProperty('--dsh-conversation-column-width', `${column}px`)
     const preference = readWidthPreference()
     if (preference === null) {
@@ -193,7 +214,7 @@ export function ConversationRoot({
     } else {
       root.style.setProperty('--dsh-chat-user-width', `${resolveContentWidth(column, preference)}px`)
     }
-  }, [])
+  }, [columnWidth])
   const rootResizeRef = useCallback((root: HTMLDivElement | null): void => {
     rootObserver.current?.disconnect()
     rootObserver.current = null
@@ -211,18 +232,17 @@ export function ConversationRoot({
   // republishes from storage — an uncommitted press leaves the stored
   // preference untouched.
   const onHandleStart = useCallback((): number => {
-    const root = rootEl.current
     /* v8 ignore next -- handles render inside the root, so the ref is always attached. */
-    if (root === null) return 680
-    return resolveContentWidth(root.offsetWidth, readWidthPreference())
-  }, [])
+    if (rootEl.current === null) return 680
+    return resolveContentWidth(columnWidth(), readWidthPreference())
+  }, [columnWidth])
   const onHandleDrag = useCallback((width: number): void => {
     const root = rootEl.current
     /* v8 ignore next -- handles render inside the root, so the ref is always attached. */
     if (root === null) return
-    const clamped = resolveContentWidth(root.offsetWidth, width)
+    const clamped = resolveContentWidth(columnWidth(), width)
     root.style.setProperty('--dsh-chat-user-width', `${clamped}px`)
-  }, [])
+  }, [columnWidth])
   const onHandleCommit = useCallback((width: number): void => {
     const root = rootEl.current
     /* v8 ignore next -- handles render inside the root, so the ref is always attached. */
@@ -369,26 +389,59 @@ export function ConversationRoot({
     </div>
   )
 
-  return (
-    <div ref={rootResizeRef} className={css.root} data-phase={phase}>
-      {sessionId === undefined ? null : renderSlot('conversation.session.header', {})}
-      <div className={css.body}>
-        <div className={css.scrollBody} data-conversation-scroll="">
-          {sessionId === undefined ? null : renderSlot('conversation.session', {})}
-          {composerSeat}
+  // The split pane is a read-only second Session column beside an active main
+  // conversation. Hidden while the pinned Session is current (nothing to read
+  // side by side), on the hero, or while a session settles; the pin itself
+  // survives so switching the main session reveals it again.
+  const activePane = paneId !== undefined && phase === 'active' ? paneId : undefined
+  paneWidth.current = activePane === undefined ? 0 : PANE_WIDTH
+  const SessionRegion = sessionRegion
+  const pane = activePane === undefined
+    ? null
+    : (
+      <aside className={css.pane} style={{ width: PANE_WIDTH }} data-conversation-pane="" aria-label={t('split.openLabel')}>
+        <div className={css.paneHeader}>
+          <span className={css.paneTitle}>{paneSummary?.displayTitle ?? activePane}</span>
+          <button
+            type="button"
+            className={css.paneClose}
+            aria-label={t('pane.close')}
+            onClick={() => { closePane(activePane) }}
+          >
+            ×
+          </button>
         </div>
-        {/* Width handles only while a transcript is on screen; the hero has no
-            content column to size. */}
-        {phase === 'active' && (['left', 'right'] as const).map(side => (
-          <WidthHandle
-            key={side}
-            side={side}
-            onStart={onHandleStart}
-            onDrag={onHandleDrag}
-            onCommit={onHandleCommit}
-            onEnd={onHandleEnd}
-          />
-        ))}
+        <div className={css.paneBody}>
+          <SessionRegion sessionId={activePane}>
+            {renderSlot('conversation.session', {})}
+          </SessionRegion>
+        </div>
+      </aside>
+    )
+
+  return (
+    <div ref={rootResizeRef} className={css.root} data-phase={phase} data-pane-open={activePane !== undefined || undefined}>
+      {sessionId === undefined ? null : renderSlot('conversation.session.header', {})}
+      <div className={css.columns}>
+        <div className={css.body}>
+          <div className={css.scrollBody} data-conversation-scroll="">
+            {sessionId === undefined ? null : renderSlot('conversation.session', {})}
+            {composerSeat}
+          </div>
+          {/* Width handles only while a transcript is on screen; the hero has no
+              content column to size. */}
+          {phase === 'active' && (['left', 'right'] as const).map(side => (
+            <WidthHandle
+              key={side}
+              side={side}
+              onStart={onHandleStart}
+              onDrag={onHandleDrag}
+              onCommit={onHandleCommit}
+              onEnd={onHandleEnd}
+            />
+          ))}
+        </div>
+        {pane}
       </div>
     </div>
   )

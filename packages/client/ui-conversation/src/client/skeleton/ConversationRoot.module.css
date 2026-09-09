@@ -314,6 +314,80 @@
   flex: none;
 }
 
+/* Band below the header: the main scrollport column and the optional split
+   pane sit side by side; the main column owns the width handles and the
+   shared width axis (measured against the main column only). */
+.columns {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.columns > .body {
+  min-width: 0;
+}
+
+/* Right read-only Session column (split view). Fixed width is driven inline
+   by the same constant the width axis subtracts, so geometry never drifts. */
+.pane {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--dsw-alias-bg-base);
+  border-left: 1px solid var(--dsw-alias-border-l3);
+}
+
+.paneHeader {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px 8px 16px;
+}
+
+.paneTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.paneClose {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.paneClose:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.paneBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--dsw-alias-border-l3);
+}
+
 /* Band below the header: the scrollport plus the width handles. Anchoring the
    handles here keeps their full-height strips and glow under the header's
    bottom edge at every header height. */

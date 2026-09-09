@@ -27,8 +27,9 @@ import { ComposerSubmissionPolicy } from './input/submission-policy.ts'
 import { queueDockEntry } from './queue/QueueDock.tsx'
 import { EnterBehaviorRow } from './settings/EnterBehaviorRow.tsx'
 import type { EnterBehaviorRowInjected } from './settings/EnterBehaviorRow.tsx'
-import { ConversationRoot } from './skeleton/ConversationRoot.tsx'
+import { conversationRootWithRegion } from './skeleton/ConversationRootWithRegion.tsx'
 import { ConversationSession, ConversationSessionHeader } from './skeleton/ConversationSession.tsx'
+import { SplitPaneAction, type SplitPaneActionInjected } from './skeleton/SplitPaneAction.tsx'
 import { InputBar } from './skeleton/InputBar.tsx'
 import { todoDockEntry } from './skeleton/TodoPanel.tsx'
 import { resolveActiveView } from './view-selection.ts'
@@ -44,7 +45,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Services required by the Conversation plugin. */
 export const inject = [
-  'slots', 'sessions', 'fileUpload', 'uiSession', 'uiWorkspace', 'locale', 'settingsScope',
+  'slots', 'sessions', 'fileUpload', 'uiSession', 'uiRenderer', 'uiWorkspace',
+  'locale', 'settingsScope',
 ]
 
 /** Conversation runtime configuration. */
@@ -118,10 +120,17 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   const maxConcurrentFileUploads = config.maxConcurrentFileUploads as number
   const workspaceNavigation = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation
   const uiConversation = new UiConversation(ctx, sessions)
+  // Renderer-delivered subtree-rebinding region for the split pane (a plain
+  // value threaded to ConversationRoot by the registration wrapper below).
+  const sessionRegion = ctx.uiRenderer.sessionRegion
 
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-conversation: dictionaries')
   const t = ctx.locale.bind(NS)
   const conversationStore = createConversationStore()
+  // Root seat feeding the retained side-pane roster to any split-aware entry
+  // (the main shell reads it to decide the pane column; header actions read it
+  // to hide the split trigger while a pin is active).
+  slots.provideRoot({ hooks: { sessionPanes: sessions.panes } })
   const submissionPolicy = new ComposerSubmissionPolicy(
     ctx.settingsScope.bind<ConversationSettings>({ namespace: CONVERSATION_SETTINGS_NAMESPACE }),
   )
@@ -229,7 +238,9 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     inject: (sessionId: SessionId | undefined): ConversationInjected => ({
       hooks: {
         composerBlock: sessionId === undefined ? ABSENT_BLOCK : composerBlocks.storeFor(sessionId),
+        sessionPanes: sessions.panes,
       },
+      closePane: (id) => { sessions.closePane(id) },
       selectWorkspace: async (workspaceId) => {
         const nextId = await workspaceNavigation.connectWorkspace(workspaceId)
         if (sessionId !== undefined && nextId !== sessionId) {
@@ -254,7 +265,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
         sessions.open(nextId)
       },
     }),
-  }, ConversationRoot)
+  }, conversationRootWithRegion(sessionRegion))
 
   const registerConversationSession = () => slots.register({
     name: 'conversation.session',
@@ -385,10 +396,25 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     },
   }, InputBar)
 
+  // The split trigger lives in the current Session's header and pins that
+  // Session into the read-only pane column; the pane shell reads the same
+  // pin through the sessions service and hides while it equals current.
+  const registerSplitPaneAction = () => slots.register({
+    name: 'conversation.session.header.actions',
+    id: 'split-pane',
+    order: 30,
+    locale: NS,
+    inject: (sessionId: SessionId): SplitPaneActionInjected => ({
+      hooks: { sessionPanes: sessions.panes },
+      pin: () => { sessions.pin(sessionId) },
+    }),
+  }, SplitPaneAction)
+
   slots.inject('conversation', function* () {
     yield registerConversationRoot()
     yield registerConversationSession()
     yield registerConversationHeader()
+    yield registerSplitPaneAction()
     yield registerComposerBar()
   })
 
