@@ -59,6 +59,7 @@ describe('UI renderer plugin', () => {
     slots.register({ name: 'root' }, () => <div data-testid="root-probe" />)
     const renderer = ctx.get('uiRenderer')
     expect(renderer).toBeDefined()
+    expect(typeof renderer!.sessionRegion).toBe('function')
     const el = container()
     act(() => { mounted.push(renderer!.mount(el)) })
     expect(el.querySelector('[data-testid="root-probe"]')).toBeTruthy()

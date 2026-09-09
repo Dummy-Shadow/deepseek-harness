@@ -10,6 +10,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { createSlotRenderer } from './scoped-slots.tsx'
 import { buildRenderApp } from './app.tsx'
 import { SlotRegistry } from './registry.ts'
+import { SessionRegionProvider } from './bindings.tsx'
 
 export { SlotRegistry } from './registry.ts'
 export type { RootOwnerProps } from './registry.ts'
@@ -20,6 +21,17 @@ export type {
   StandardSourceBinding, StoreInstanceLike,
 } from '@deepseek-ai/dsh-client-ui-slots'
 
+/** Props of the session-region capability handed to feature plugins. */
+export interface SessionRegionProps {
+  /** Target session identity the subtree binds to (must be resolvable by the scope adapter). */
+  sessionId: string
+  /** Subtree rebound to the target session instead of the scope's current selection. */
+  children: ReactNode
+}
+
+/** Rebind one subtree to a resolved Session rather than the current one. */
+export type SessionRegionComponent = (props: SessionRegionProps) => ReactNode
+
 /** Mount operation exposed to the framework-free boot kernel. */
 export interface UiRendererService {
   /**
@@ -28,6 +40,8 @@ export interface UiRendererService {
    * @returns Disposer that unmounts the React root.
    */
   mount: (container: HTMLElement) => () => void
+  /** Subtree-rebinding region for a fixed Session id (see SessionRegionProvider). */
+  sessionRegion: SessionRegionComponent
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -93,5 +107,6 @@ export function apply(ctx: Context): void {
       const root = mountApp(container, buildRenderApp({ ctx }))
       return () => { root.unmount() }
     },
+    sessionRegion: SessionRegionProvider,
   })
 }
