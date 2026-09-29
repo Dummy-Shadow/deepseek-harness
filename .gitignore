@@ -46,3 +46,15 @@ worktrees/
 .agents/worktrees/
 .typert-*/
 native/system/test/bin/
+
+# Local fork (Dummy-Shadow): machine-local research data, logs, LaTeX/PDF
+# build inputs, and desktop launchers stay out of the published fork.
+.research/
+*.log
+/DSH-迭代方案.md
+/二次开发指南.tex
+/二次开发指南.pdf
+/deepseek.ico
+/启动-DeepSeek-Harness.bat
+/启动-DeepSeek-Harness.lnk
+/创建桌面快捷方式.bat
