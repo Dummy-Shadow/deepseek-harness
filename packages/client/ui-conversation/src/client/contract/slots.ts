@@ -9,8 +9,9 @@ import type {
 } from '@deepseek-ai/dsh-client-store'
 import type {
   FactoryComponentPropsOf, FactoryLocalComponentPropsOf,
-  InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore,
+  HostObservable, InjectFace, PropsLocale, PropsRenderFactories, PropsRenderSlots, PropsRuntime, PropsStore,
 } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ConversationPaneView } from '../panes.ts'
 import type { SessionPendingInteraction } from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -449,11 +450,23 @@ export interface HeroBrandMarkOwnerProps {
   className?: string | undefined
 }
 
+/** Registration-side face of the resident Conversation shell: its open side panes. */
+export interface ConversationRootInjected {
+  hooks: {
+    /** Open side panes, bound by the renderer as `usePanes`. */
+    panes: HostObservable<readonly ConversationPaneView[]>
+  }
+  /** Release one side pane's retained reference. */
+  closePane: (sessionId: SessionId) => void
+}
+
 /** Full props of the resident optional-Session Conversation shell. */
 export type ConversationSlotProps =
   PropsRuntime<'main.conversation'>
   & PropsRenderSlots<'conversation.header'>
   & PropsRenderFactories
+  & InjectFace<ConversationRootInjected>
+  & PropsLocale<'conversation'>
 
 /** Inputs shared by main and embedded Conversation content occurrences. */
 export interface ConversationContentInputProps {

@@ -543,3 +543,87 @@ button.crumb:hover {
 .embeddedBody[data-content-phase='settling'] .composerSeat {
   visibility: hidden;
 }
+
+/* Split layout: the main Conversation column plus optional retained side
+   panes. The main column keeps the flexible remainder; each pane owns its
+   width and its own SessionProvider subtree. */
+.split {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--dsw-alias-bg-base);
+}
+
+.main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pane {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow: hidden;
+  border-left: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.paneHeader {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-height: 38px;
+  padding: 4px 8px 4px 12px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+.paneTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paneClose {
+  flex: none;
+}
+
+.paneIcon {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
+/* Left-edge resize strip; dragging left widens the pane. */
+.paneResize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  width: 6px;
+  cursor: col-resize;
+}
+
+.paneResize::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: transparent;
+}
+
+.paneResize:hover::after,
+.paneResize[data-dragging]::after {
+  background: var(--dsw-alias-scrollbar-bg-l1);
+}

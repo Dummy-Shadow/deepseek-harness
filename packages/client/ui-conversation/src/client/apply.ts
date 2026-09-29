@@ -16,7 +16,7 @@ import type { ShortcutCommandId, ShortcutFixedCommand } from '@deepseek-ai/dsh-c
 import { UiConversation } from './conversation/assembly.ts'
 import type { ViewTab } from './contract/views.ts'
 import type {
-  ComposerBarInjected, ConversationInjected, ConversationSessionHeaderInjected,
+  ComposerBarInjected, ConversationInjected, ConversationRootInjected, ConversationSessionHeaderInjected,
   ConversationSessionInjected, DraftFileUploads,
 } from './contract/slots.ts'
 import type { InputNotice } from './contract/input.ts'
@@ -38,6 +38,9 @@ import { ConversationContent } from './skeleton/ConversationContent.tsx'
 import { ConversationPanel } from './skeleton/ConversationPanel.tsx'
 import { ConversationHeader } from './skeleton/ConversationHeader.tsx'
 import { ConversationSession, ConversationSessionHeader } from './skeleton/ConversationSession.tsx'
+import { SplitPaneAction } from './skeleton/SplitPaneAction.tsx'
+import type { SplitPaneInjected } from './skeleton/SplitPaneAction.tsx'
+import { ConversationPanes } from './panes.ts'
 import { InputBar } from './skeleton/InputBar.tsx'
 import { todoDockEntry } from './skeleton/TodoPanel.tsx'
 import { installStopShortcut } from './stop-shortcut.ts'
@@ -156,6 +159,9 @@ export function apply(ctx: Context, config: Config = Config({})): void {
   const maxConcurrentFileUploads = config.maxConcurrentFileUploads as number
   const workspaceNavigation = ctx.get('uiWorkspace') as unknown as WorkspaceNavigation
   const uiConversation = new UiConversation(ctx, sessions)
+  // Retained side panes live for the plugin's lifetime; teardown releases them.
+  const panes = new ConversationPanes(sessions)
+  ctx.effect(() => () => { panes.dispose() }, 'ui-conversation: side panes')
 
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-conversation: dictionaries')
   const t = ctx.locale.bind(NS)
@@ -301,9 +307,14 @@ export function apply(ctx: Context, config: Config = Config({})): void {
 
   const registerConversationRoot = () => slots.register({
     name: 'main.conversation',
+    locale: NS,
     children: {
       'conversation.header': { kind: 'single', scope: 'session-maybe' },
     },
+    inject: (): ConversationRootInjected => ({
+      hooks: { panes: panes.source },
+      closePane: (sessionId) => { panes.close(sessionId) },
+    }),
   }, ConversationRoot)
 
   const registerConversationContent = () => slots.registerFactory({
@@ -542,6 +553,19 @@ export function apply(ctx: Context, config: Config = Config({})): void {
     yield registerSessionHeader()
     yield registerComposerBar()
   })
+
+  // One additive trigger per Session header: it opens that Session as a side
+  // pane, or closes its pane when already open. Several panes may coexist.
+  slots.inject('conversation.session.header.actions', () => slots.register({
+    name: 'conversation.session.header.actions',
+    id: 'split-pane',
+    order: 30,
+    locale: NS,
+    inject: (): SplitPaneInjected => ({
+      hooks: { panes: panes.source },
+      togglePane: (sessionId) => { panes.toggle(sessionId) },
+    }),
+  }, SplitPaneAction))
 
   ctx.plugin(ConversationController, {
     input: inputHub,

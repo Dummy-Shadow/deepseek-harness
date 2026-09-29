@@ -14,11 +14,16 @@
 - [x] **4.1 flash 接入**：官方 API 现为 `id=deepseek-flash`（DeepSeek-V4.1-Flash，text+image、1M ctx）；写入 `~/.dsh/settings.yaml` 目录并把默认模型切到 `deepseek-flash`（`deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` 旧 id 已被 API 别名到同一模型，故仓库默认目录暂不动，避免上游 snapshot 连锁重录）
 - [x] 门禁：`verify-runtime-closure`（6 presets 闭环）、`verify-default-product-isolation`、`verify-config-source-ownership` 全绿
 - [x] 推送分支到 fork：`mine/upgrade/0.2.0-rc.2`
+- [x] **分屏（split pane）按 0.2.0 架构重实现**（分支 `upgrade/0.2.0-rc.2`）：
+  - 新增 `ConversationPanes`（`packages/client/ui-conversation/src/client/panes.ts`）：以 `retain/SessionReference` 引用计数持有 pane，`conversationPane` source 标签，名册可观察；关闭先撤渲染目标再 `release`
+  - 主面板拆为「主列 + N 个 pane 列」（`ConversationMainPanel.tsx`）：每个 pane 用框架 `SessionProvider session={reference}` 包住 `renderFactorySlot('conversation.content', …)`，复用主列同一套「对话记录 + composer」，故 pane 完整可交互
+  - 头部加性动作 `SplitPaneAction`（注册进 `conversation.session.header.actions`，order 30）：pin/unpin 当前会话，可多 pane；pane 头部有列表标题 + 关闭按钮 + 左缘拖宽（按会话持久化 `dsh.conversation.paneWidth.<id>`，clamp 320–720）
+  - 测试：`tests/panes.spec.ts`、`tests/split-pane-action.client.spec.tsx`、`tests/skeleton.client.spec.tsx` 新增用例；`typecheck:contracts-ready` + ui-conversation 558 例 + 全 `test:gui`（仅剩既有 Windows host 路径失败）通过
+  - Agent Note：`.agents/notes/implemented/feature/2026-09-30-session-split-pane.md`（含中文配对）
 
 ## 二、进行中 / 待办 🔄
-- [ ] **分屏（split pane）重实现**：0.2.0 已把 `ISessions.pin/closePane` + `panes` 可观察量重构为 `retain(target,{source})`/`SessionReference` 引用计数模型，旧的 Layer A/B/C 代码不可平移，须按新架构重写。落点与配方见 `SPLIT-PANE-HANDOFF.md`。这是“保留当前 WebUI 插件功能”里唯一仍需大量工作的项。
-- [ ] **外部 WebUI 插件对齐**：升级到 0.2.0 后核对 `@linxin666/dsh-web-all`（SSH/任务看板/宠物/skin-center/git-graph 等）、`@proton1917/dsh-live-stats`、`@a9i5k4/dsh-literature`、`dsh-mimir`、`dsh-kb-rag` 的兼容版本；插件 API 破坏性变更需按上游说明重新对齐（0.1.2-alpha.1 起官方讨论 #4867）
-- [ ] 运行验证：重启 `dsh web`（0.2.0 源码）确认 Web UI、会话迁移、4.1 flash 选择、并发/科研 preset 可用
+- [ ] **外部 WebUI 插件适配（不只是版本对齐，可能要魔改插件源码）**：升级到 0.2.0 后核对并按需改造 `@linxin666/dsh-web-all`（SSH/任务看板/宠物/skin-center/git-graph/远程/web-ui 设置/better-sidebar）、`@proton1917/dsh-live-stats`、`@a9i5k4/dsh-literature`、`dsh-mimir`、`dsh-kb-rag` 等。用户已确认：Web 端与本地端差异很大，部分插件需要直接魔改。待先盘点各插件的 0.2.0 兼容性。
+- [ ] 运行验证：重启 `dsh web`（0.2.0 源码）确认 Web UI、会话迁移、4.1 flash 选择、并发/科研 preset、分屏可用
 - [ ] 合并/发布决策：是否需要把 `upgrade/0.2.0-rc.2` 合回本地主工作树，或长期驻留分支
 
 ## 三、已被上游取代 / 可删除 🗑️

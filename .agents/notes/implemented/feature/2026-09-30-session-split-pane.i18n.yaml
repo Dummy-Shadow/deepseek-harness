@@ -1,0 +1,25 @@
+# Bilingual-pair consistency record for 2026-09-30-session-split-pane.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-30-session-split-pane.md
+/agent-note-side-by-side-session-panes-in-the-conversation-shell:
+  en: bff3d6d13caa5b3c
+  zh: df2e7f4319420b81
+/agent-note-side-by-side-session-panes-in-the-conversation-shell/problem:
+  en: 7eb4079c5ff62c5e
+  zh: 3dae85d3e33adc41
+/agent-note-side-by-side-session-panes-in-the-conversation-shell/decision:
+  en: 315a03c2b4e393bd
+  zh: b7d8dd0452347d35
+/agent-note-side-by-side-session-panes-in-the-conversation-shell/alternatives-considered:
+  en: df96f3e382c78f17
+  zh: 347a8f894fcc7392
+/agent-note-side-by-side-session-panes-in-the-conversation-shell/consequences:
+  en: 28fa6647dddb8c6c
+  zh: 7ccaaf1b36514c7a
+/agent-note-side-by-side-session-panes-in-the-conversation-shell/testing:
+  en: e93a29330bb1be64
+  zh: 42bb31c11608cf35
+/agent-note-side-by-side-session-panes-in-the-conversation-shell/related:
+  en: 419b7477c83a9287
+  zh: 0a686f453bffd460

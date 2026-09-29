@@ -1,0 +1,14 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+}
+
+.button[aria-pressed='true'] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+}

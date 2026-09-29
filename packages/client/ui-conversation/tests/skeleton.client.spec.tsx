@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import type { GlobalStandardProps, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createContext, useContext, type ReactNode } from 'react'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
@@ -18,6 +18,7 @@ import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts
 import { EMPTY_CONVERSATION_SNAPSHOT } from '../src/client/contract/snapshot.ts'
 import type { ConversationSnapshot } from '../src/client/contract/snapshot.ts'
 import { createConversationStore } from '../src/client/stores.ts'
+import type { ConversationPaneView } from '../src/client/panes.ts'
 import { SessionInputShell } from '../src/client/input/facade.ts'
 import { en, zh } from '../src/client/locales.ts'
 import { ConversationContent } from '../src/client/skeleton/ConversationContent.tsx'
@@ -140,6 +141,8 @@ function mount(
     composerBlock?: { reason: string }
     /** Mutable view ledger used by registration-order regressions. */
     viewTabs?: ViewTab[]
+    /** Side panes rendered beside the main column. */
+    panes?: ConversationPaneView[]
   } = {},
 ) {
   const sessionId = 'sessionId' in options ? options.sessionId : SID
@@ -168,6 +171,8 @@ function mount(
     phase: 'ready', projectionsBySession: {},
   })
   const workspaces = createSnapshotStore<WorkspaceSnapshot>(workspaceState(workspaceRows))
+  const panesStore = createSnapshotStore<readonly ConversationPaneView[]>(options.panes ?? [])
+  const closePane = vi.fn()
   const session = createSnapshotStore<SessionSnapshot>(snapshot)
   const useSession = bindSnapshotSelector(session)
   const conversation = createSnapshotStore<ConversationSnapshot>(EMPTY_CONVERSATION_SNAPSHOT)
@@ -355,7 +360,7 @@ function mount(
       </FactoryViewsTestContext.Provider>
     )
   }) as ConversationSlotProps['renderFactorySlot']
-  const runtimeProps: PropsRuntime<'main.conversation'> & Pick<ConversationSlotProps, 'SessionProvider'> = {
+  const runtimeProps: Omit<ConversationSlotProps, 'renderSlot' | 'renderFactorySlot' | '__renders'> = {
     usePanelInfo: selector => selector({ activePanelId: null }),
     sessionId,
     SessionProvider,
@@ -369,11 +374,15 @@ function mount(
     useProjection: (() => undefined),
     useInput,
     inputActions,
+    usePanes: bindSnapshotSelector(panesStore),
+    closePane,
+    t,
   }
   const props: ConversationSlotProps = { ...runtimeProps, renderSlot, renderFactorySlot }
   const view = render(<ConversationMainPanel {...props} />)
   return {
     view, store, wiring, sink, retargetWorkspace, session, conversation, slotCalls, lineageOwners, seatOwners, open,
+    panesStore, closePane,
     pickerOwner: () => pickerOwner,
     rerender: () => { view.rerender(<ConversationMainPanel {...props} />) },
   }
@@ -839,5 +848,109 @@ describe('ConversationRoot resident composer', () => {
   it('hero phase renders no width handles (no transcript to size)', () => {
     const b = mount(sessionSnapshotOf({ blank: true }))
     expect(b.view.container.querySelector('[data-width-handle]')).toBeNull()
+  })
+})
+
+describe('ConversationRoot side panes', () => {
+  const paneView = (id: SessionId): ConversationPaneView => ({ sessionId: id, reference: { sessionId: id } as never })
+
+  it('renders a retained pane beside the main column and closes it', () => {
+    const other = sid('pane-1')
+    const b = mount(sessionSnapshotOf(), undefined, undefined, { panes: [paneView(other)] })
+    const pane = b.view.container.querySelector(`[data-conversation-pane="${other}"]`)
+    expect(pane).not.toBeNull()
+    fireEvent.click(b.view.getByRole('button', { name: '关闭分屏' }))
+    expect(b.closePane).toHaveBeenCalledWith(other)
+  })
+
+  it('never renders the current Session as its own pane', () => {
+    const b = mount(sessionSnapshotOf(), undefined, undefined, { panes: [paneView(SID)] })
+    expect(b.view.container.querySelector(`[data-conversation-pane="${SID}"]`)).toBeNull()
+  })
+
+  it('opens a pane at its persisted width', () => {
+    const other = sid('pane-persist')
+    localStorage.setItem(`dsh.conversation.paneWidth.${other}`, '600')
+    const b = mount(sessionSnapshotOf(), undefined, undefined, { panes: [paneView(other)] })
+    const pane = b.view.container.querySelector(`[data-conversation-pane="${other}"]`) as HTMLElement
+    expect(pane.style.width).toBe('600px')
+  })
+
+  it('falls back to the default width on a corrupt preference', () => {
+    const other = sid('pane-corrupt')
+    localStorage.setItem(`dsh.conversation.paneWidth.${other}`, 'not-a-number')
+    const b = mount(sessionSnapshotOf(), undefined, undefined, { panes: [paneView(other)] })
+    const pane = b.view.container.querySelector(`[data-conversation-pane="${other}"]`) as HTMLElement
+    expect(pane.style.width).toBe('420px')
+  })
+
+  it('drags a pane wider leftward, clamps, and persists per Session', () => {
+    const other = sid('pane-drag')
+    const b = mount(sessionSnapshotOf(), undefined, undefined, { panes: [paneView(other)] })
+    const pane = b.view.container.querySelector(`[data-conversation-pane="${other}"]`) as HTMLElement
+    const handle = pane.querySelector('[data-pane-resize]') as HTMLElement
+    const captured = new Set<number>()
+    Object.defineProperties(handle, {
+      setPointerCapture: { configurable: true, value: (id: number) => { captured.add(id) } },
+      releasePointerCapture: { configurable: true, value: (id: number) => { captured.delete(id) } },
+      hasPointerCapture: { configurable: true, value: (id: number) => captured.has(id) },
+    })
+    // Secondary buttons never start a drag.
+    fireEvent.pointerDown(handle, { pointerId: 9, button: 1, clientX: 800, clientY: 300 })
+    expect(handle.hasAttribute('data-dragging')).toBe(false)
+    fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientX: 800, clientY: 300 })
+    expect(handle.hasAttribute('data-dragging')).toBe(true)
+    // Move to the left widens: 420 + (800 − 700) = 520.
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 700, clientY: 300 })
+    expect(pane.style.width).toBe('520px')
+    // A move for a foreign pointer id is ignored.
+    fireEvent.pointerMove(handle, { pointerId: 2, clientX: 0, clientY: 0 })
+    expect(pane.style.width).toBe('520px')
+    // Dragging far left clamps to the maximum.
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: -400, clientY: 300 })
+    expect(pane.style.width).toBe('720px')
+    fireEvent.pointerUp(handle, { pointerId: 1, clientX: -400, clientY: 300 })
+    expect(handle.hasAttribute('data-dragging')).toBe(false)
+    expect(localStorage.getItem(`dsh.conversation.paneWidth.${other}`)).toBe('720')
+  })
+
+  it('ignores a pointer move that never started a drag', () => {
+    const other = sid('pane-idle')
+    const b = mount(sessionSnapshotOf(), undefined, undefined, { panes: [paneView(other)] })
+    const handle = b.view.container.querySelector(`[data-conversation-pane="${other}"] [data-pane-resize]`) as HTMLElement
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 100, clientY: 0 })
+    fireEvent.pointerUp(handle, { pointerId: 1, clientX: 100, clientY: 0 })
+    expect(localStorage.getItem(`dsh.conversation.paneWidth.${other}`)).toBeNull()
+  })
+
+  it('renders a pane whose Session the list has not summarised yet', () => {
+    const other = sid('pane-cold')
+    const b = mount(sessionSnapshotOf(), undefined, undefined, { panes: [paneView(other)] })
+    const pane = b.view.container.querySelector(`[data-conversation-pane="${other}"]`) as HTMLElement
+    expect(pane.getAttribute('data-phase')).toBe('hero')
+    expect(pane.textContent).toContain('pane-cold')
+  })
+
+  it('renders a summarised pane as active with its list title', () => {
+    const other = sid('root')
+    const b = mount(sessionSnapshotOf(), undefined, undefined, { panes: [paneView(other)] })
+    const pane = b.view.container.querySelector(`[data-conversation-pane="${other}"]`) as HTMLElement
+    expect(pane.getAttribute('data-phase')).toBe('active')
+    expect(pane.textContent).toContain('Root')
+  })
+
+  it('stops a pane width drag when the pointer capture is lost mid-gesture', () => {
+    const other = sid('pane-lost')
+    const b = mount(sessionSnapshotOf(), undefined, undefined, { panes: [paneView(other)] })
+    const pane = b.view.container.querySelector(`[data-conversation-pane="${other}"]`) as HTMLElement
+    const handle = pane.querySelector('[data-pane-resize]') as HTMLElement
+    Object.defineProperties(handle, {
+      setPointerCapture: { configurable: true, value: () => {} },
+      releasePointerCapture: { configurable: true, value: () => {} },
+      hasPointerCapture: { configurable: true, value: () => false },
+    })
+    fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientX: 800, clientY: 300 })
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 700, clientY: 300 })
+    expect(pane.style.width).toBe('420px')
   })
 })
